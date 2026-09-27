@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Business card</title>
+<!--
+  Standard business card, front + back, with 3 mm bleed.
+  Open in a browser to preview. Add ?size=us for the US size (3.5 × 2 in).
+  `node marketing/render.mjs` exports print-ready PDFs and PNG previews.
+-->
+<link rel="stylesheet" href="../lib/shared.css">
+<style>
+    :root { --w: 85mm; --h: 55mm; --bleed: 3mm; --safe: 5mm; }
+    :root[data-size="us"] { --w: 88.9mm; --h: 50.8mm; --bleed: 3.175mm; }
+
+    body { background: #e9e4dc; min-height: 100vh; display: flex; flex-wrap: wrap; gap: 14mm; align-items: center; justify-content: center; padding: 14mm; }
+
+    /* On screen: show the trimmed card. In print: full page including bleed. */
+    .sheet { width: var(--w); height: var(--h); overflow: hidden; border-radius: 3mm; box-shadow: 0 1mm 2mm rgb(0 0 0 / .08), 0 6mm 14mm rgb(22 19 31 / .18); flex: none; }
+    .card { position: relative; overflow: hidden; width: calc(var(--w) + 2 * var(--bleed)); height: calc(var(--h) + 2 * var(--bleed)); margin: calc(-1 * var(--bleed)); padding: calc(var(--bleed) + var(--safe)); }
+
+    /* ---------- Front ---------- */
+    .card--front { background: var(--ink); color: var(--paper); display: flex; flex-direction: column; justify-content: space-between; }
+    .card--front .wordmark { font-size: 15.5mm; }
+    .front__role { font: 600 2.75mm/1.3 var(--body); letter-spacing: .02em; margin-top: 2.6mm; color: var(--paper); }
+    .front__services { font: 500 2.05mm/1.5 var(--body); letter-spacing: .09em; text-transform: uppercase; color: rgb(251 247 241 / .62); max-width: 44mm; }
+    .orb { position: absolute; border-radius: 50%; }
+    .orb--1 { width: 38mm; height: 38mm; right: -10mm; bottom: -14mm; background: radial-gradient(circle at 35% 30%, #ff8a70, var(--accent) 45%, #d63d18 100%); }
+    .orb--2 { width: 58mm; height: 58mm; right: -20mm; bottom: -24mm; border: .3mm solid rgb(255 90 54 / .45); }
+    .orb--3 { width: 5mm; height: 5mm; right: 28mm; bottom: 19mm; background: var(--violet); }
+    .front__top, .front__bottom { position: relative; z-index: 1; }
+
+    /* ---------- Back ---------- */
+    .card--back { background: var(--paper); display: grid; grid-template-columns: 1fr auto; gap: 4mm; align-items: center; }
+    .card--back::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--bleed) + 2.2mm); background: var(--accent); }
+    .back__name { font: 760 6.2mm/1 var(--display); letter-spacing: -.035em; }
+    .back__role { font: 600 2.3mm/1.3 var(--body); color: var(--accent-dark); margin: 1.2mm 0 3.6mm; letter-spacing: .01em; }
+    .contacts { list-style: none; display: grid; gap: 1.55mm; }
+    .contacts li { display: flex; align-items: center; gap: 1.8mm; font: 500 2.35mm/1.2 var(--body); color: var(--ink-2); white-space: nowrap; }
+    .contacts svg { width: 2.9mm; height: 2.9mm; flex: none; stroke: var(--accent-dark); }
+    .back__qr { text-align: center; }
+    .back__qr .qr { width: 21mm; height: 21mm; padding: 1.6mm; background: #fff; border-radius: 2mm; }
+    .back__qr p { font: 650 1.9mm/1.25 var(--body); margin-top: 1.4mm; color: var(--ink); letter-spacing: .02em; }
+    .back__qr p span { display: block; font-weight: 500; color: var(--muted); }
+
+    .preview-note { width: 100%; text-align: center; font: 500 3.2mm/1.5 var(--body); color: #6b6478; }
+
+    html[data-exporting] body { background: transparent; }
+
+    @media print {
+        body { display: block; background: none; padding: 0; min-height: 0; }
+        .sheet { width: auto; height: auto; overflow: visible; border-radius: 0; box-shadow: none; break-after: page; }
+        .card { margin: 0; }
+        .preview-note { display: none; }
+    }
+</style>
+</head>
+<body>
+    <div class="sheet" data-export="front">
+        <div class="card card--front">
+            <span class="orb orb--2"></span><span class="orb orb--1"></span><span class="orb orb--3"></span>
+            <div class="front__top">
+                <div class="wordmark" data-wordmark></div>
+                <p class="front__role" data-brand="role"></p>
+            </div>
+            <p class="front__bottom front__services" data-brand="services" data-join=" · "></p>
+        </div>
+    </div>
+
+    <div class="sheet" data-export="back">
+        <div class="card card--back">
+            <div>
+                <p class="back__name" data-brand="name"></p>
+                <p class="back__role" data-brand="role"></p>
+                <ul class="contacts">
+                    <li data-row><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg><span data-brand="phone" data-hide-empty></span></li>
+                    <li data-row><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg><span data-brand="email" data-hide-empty></span></li>
+                    <li data-row><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span data-brand="website" data-hide-empty></span></li>
+                    <li data-row><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/></svg><span data-brand="instagram" data-hide-empty></span></li>
+                </ul>
+            </div>
+            <div class="back__qr">
+                <div class="qr" data-qr="#16131f"></div>
+                <p>Scan to book<span>a free consultation</span></p>
+            </div>
+        </div>
+    </div>
+
+    <p class="preview-note">Preview (trimmed). Print files include 3 mm bleed · add <code>?size=us</code> for 3.5 × 2 in</p>
+
+<script src="../brand.js"></script>
+<script src="../lib/qrcode.js"></script>
+<script>
+    // Card size: EU/ISO 85 × 55 mm by default, US 3.5 × 2 in with ?size=us
+    (function () {
+        var us = new URLSearchParams(location.search).get('size') === 'us';
+        document.documentElement.setAttribute('data-size', us ? 'us' : 'eu');
+        var page = us ? '95.25mm 57.15mm' : '91mm 61mm';
+        var style = document.createElement('style');
+        style.textContent = '@page { size: ' + page + '; margin: 0; }';
+        document.head.appendChild(style);
+    })();
+</script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>

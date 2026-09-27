@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ads</title>
+<!--
+  Social media ads promoting your services to small businesses.
+  `node marketing/render.mjs` exports each artboard as a PNG at its exact size.
+-->
+<link rel="stylesheet" href="../lib/shared.css">
+<style>
+    body { background: #ddd6cb; padding: 40px; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+    html:not([data-exporting]) .board { zoom: .42; }
+    .board { position: relative; overflow: hidden; flex: none; }
+    .board__label { position: absolute; top: -28px; left: 0; font: 600 13px var(--body); color: #6b6478; }
+    .icon { width: 1em; height: 1em; flex: none; }
+
+    .orb { position: absolute; border-radius: 50%; pointer-events: none; }
+    .ring { position: absolute; border-radius: 50%; border: 3px solid; pointer-events: none; }
+    .brandline { display: flex; align-items: center; gap: 18px; }
+    .brandline .wordmark { font-size: 64px; }
+    .brandline small { font: 600 22px/1.25 var(--body); opacity: .72; max-width: 460px; }
+    .cta { display: inline-flex; align-items: center; gap: 16px; border-radius: 999px; font: 700 34px/1 var(--body); padding: 28px 42px; }
+    .cta .icon { width: 34px; height: 34px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 14px; }
+    .chip { display: inline-flex; align-items: center; gap: 12px; padding: 16px 26px; border-radius: 999px; font: 650 30px/1 var(--body); }
+    .chip .icon { width: 30px; height: 30px; }
+    .hl { font-family: var(--display); font-weight: 780; letter-spacing: -.045em; line-height: .95; }
+    .hl em { font-style: normal; color: var(--accent); }
+
+    /* ---------- 1. Square: services (1080×1080) ---------- */
+    .sq1 { width: 1080px; height: 1080px; background: var(--ink); color: var(--paper); padding: 84px; display: flex; flex-direction: column; }
+    .sq1 .orb--a { width: 620px; height: 620px; right: -260px; top: -240px; background: radial-gradient(circle, rgb(255 90 54 / .55), transparent 65%); }
+    .sq1 .ring--a { width: 440px; height: 440px; right: -150px; top: -120px; border-color: rgb(255 90 54 / .4); }
+    .sq1 .kicker { margin-top: 70px; font: 700 26px var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+    .sq1 .hl { font-size: 132px; margin-top: 22px; }
+    .sq1 .sub { margin-top: 34px; font: 500 34px/1.4 var(--body); color: rgb(251 247 241 / .78); max-width: 820px; }
+    .sq1 .chips { margin-top: 44px; }
+    .sq1 .chip { background: rgb(251 247 241 / .08); border: 2px solid rgb(251 247 241 / .16); }
+    .sq1 .chip .icon { color: var(--accent); }
+    .sq1 .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+    .sq1 .cta { background: var(--accent); color: var(--ink); }
+    .sq1 .url { font: 600 28px var(--body); opacity: .75; }
+
+    /* ---------- 2. Square: launch pack offer (1080×1080) ---------- */
+    .sq2 { width: 1080px; height: 1080px; background: var(--paper); color: var(--ink); padding: 84px; display: flex; flex-direction: column; }
+    .sq2 .orb--a { width: 700px; height: 700px; left: -300px; bottom: -330px; background: radial-gradient(circle, var(--violet-soft), transparent 68%); }
+    .sq2 .orb--b { width: 600px; height: 600px; right: -250px; top: -250px; background: radial-gradient(circle, var(--accent-soft), transparent 68%); }
+    .sq2 .tag { align-self: flex-start; margin-top: 56px; background: var(--ink); color: var(--paper); font: 700 24px var(--body); letter-spacing: .12em; text-transform: uppercase; padding: 14px 24px; border-radius: 999px; }
+    .sq2 .hl { font-size: 112px; margin-top: 30px; }
+    .sq2 .hl em { color: var(--accent-dark); }
+    .sq2 .offer { position: relative; margin-top: auto; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: end; background: #fff; border-radius: 40px; padding: 44px 48px; box-shadow: 0 40px 80px -30px rgb(22 19 31 / .35); }
+    .sq2 .checks { list-style: none; display: grid; gap: 16px; }
+    .sq2 .checks li { display: flex; align-items: center; gap: 16px; font: 600 29px/1.2 var(--body); }
+    .sq2 .checks .icon { width: 34px; height: 34px; padding: 6px; border-radius: 50%; background: var(--accent); color: var(--ink); stroke-width: 3; }
+    .sq2 .price { text-align: right; }
+    .sq2 .price small { display: block; font: 600 26px var(--body); color: var(--muted); }
+    .sq2 .price strong { display: block; font: 800 104px/1 var(--display); letter-spacing: -.05em; margin: 6px 0 22px; }
+    .sq2 .cta { background: var(--accent); color: var(--ink); font-size: 28px; padding: 22px 32px; }
+    .sq2 .cta .icon { width: 28px; height: 28px; }
+
+    /* ---------- 3. Story (1080×1920) ---------- */
+    .story { width: 1080px; height: 1920px; background: var(--accent); color: var(--ink); padding: 200px 90px 0; display: flex; flex-direction: column; }
+    .story .wordmark i { color: var(--paper); }
+    .story .ring--a { width: 900px; height: 900px; right: -420px; top: -300px; border-color: rgb(22 19 31 / .14); }
+    .story .ring--b { width: 600px; height: 600px; right: -270px; top: -150px; border-color: rgb(22 19 31 / .14); }
+    .story .brandline small { opacity: .85; }
+    .story .kicker { margin-top: 70px; font: 700 34px var(--body); letter-spacing: .12em; text-transform: uppercase; }
+    .story .hl { font-size: 132px; margin-top: 26px; }
+    .story .hl em { color: var(--paper); }
+    .story .panel { margin-top: 64px; background: var(--ink); color: var(--paper); border-radius: 48px; padding: 56px; }
+    .story .list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 30px 24px; }
+    .story .list li { display: flex; align-items: center; gap: 18px; font: 650 34px/1.15 var(--body); }
+    .story .list .icon { width: 64px; height: 64px; padding: 15px; border-radius: 18px; background: rgb(255 90 54 / .16); color: var(--accent); }
+    .story .book { margin-top: 64px; display: grid; grid-template-columns: auto 1fr; gap: 44px; align-items: center; }
+    .story .qr { width: 240px; height: 240px; padding: 18px; background: var(--paper); border-radius: 28px; }
+    .story .book p { font: 800 64px/1 var(--display); letter-spacing: -.035em; }
+    .story .book span { display: block; font: 600 32px/1.3 var(--body); margin-top: 16px; }
+
+    /* ---------- 4. Landscape: link ad & website preview (1200×628 / 1200×630) ---------- */
+    .wide { width: 1200px; background: var(--ink); color: var(--paper); padding: 64px 72px; display: grid; grid-template-columns: 1fr 290px; gap: 56px; align-items: center; }
+    .wide--628 { height: 628px; }
+    .wide--630 { height: 630px; }
+    .wide .orb--a { width: 700px; height: 700px; right: -260px; bottom: -380px; background: radial-gradient(circle, rgb(255 90 54 / .5), transparent 65%); }
+    .wide .brandline .wordmark { font-size: 54px; }
+    .wide .hl { font-size: 76px; margin: 32px 0 30px; }
+    .wide .chips { gap: 10px; }
+    .wide .chip { font-size: 20px; padding: 10px 16px; background: rgb(251 247 241 / .08); border: 1.5px solid rgb(251 247 241 / .16); }
+    .wide .chip .icon { width: 21px; height: 21px; color: var(--accent); }
+    .wide .side { position: relative; display: grid; gap: 22px; justify-items: center; text-align: center; }
+    .wide .qr { width: 236px; height: 236px; padding: 18px; background: var(--paper); border-radius: 28px; }
+    .wide .side p { font: 700 30px/1.15 var(--display); }
+    .wide .side span { display: block; font: 500 21px var(--body); opacity: .72; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Reusable icons -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+        <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+        <symbol id="i-app" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="i-megaphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.6 7.6"/><circle cx="11" cy="11" r="2"/></symbol>
+        <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+        <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    </defs>
+</svg>
+
+<!-- 1. Instagram / Facebook feed: services -->
+<section class="board sq1" data-export="ad-square-services">
+    <span class="orb orb--a"></span><span class="ring ring--a"></span>
+    <div class="brandline"><span class="wordmark" data-wordmark></span><small data-brand="role"></small></div>
+    <p class="kicker">Small business owners</p>
+    <h1 class="hl">Let's get your business <em>seen.</em></h1>
+    <p class="sub">One creative partner for your website, Google visibility, content and visuals.</p>
+    <div class="chips">
+        <span class="chip"><svg class="icon"><use href="#i-code"/></svg>Websites</span>
+        <span class="chip"><svg class="icon"><use href="#i-app"/></svg>Web apps</span>
+        <span class="chip"><svg class="icon"><use href="#i-search"/></svg>SEO</span>
+        <span class="chip"><svg class="icon"><use href="#i-megaphone"/></svg>Content</span>
+        <span class="chip"><svg class="icon"><use href="#i-pen"/></svg>Graphic design</span>
+        <span class="chip"><svg class="icon"><use href="#i-camera"/></svg>Photo &amp; video</span>
+    </div>
+    <div class="foot">
+        <span class="cta"><svg class="icon"><use href="#i-calendar"/></svg>Book a free call</span>
+        <span class="url" data-brand="website"></span>
+    </div>
+</section>
+
+<!-- 2. Instagram / Facebook feed: launch pack offer -->
+<section class="board sq2" data-export="ad-square-offer">
+    <span class="orb orb--a"></span><span class="orb orb--b"></span>
+    <div class="brandline"><span class="wordmark" data-wordmark></span><small data-brand="role"></small></div>
+    <span class="tag" data-brand="offer.name"></span>
+    <h1 class="hl">Launch your business online, <em>the easy way.</em></h1>
+    <div class="offer">
+        <ul class="checks">
+            <template data-list="offer.items"><li><svg class="icon"><use href="#i-check"/></svg><span data-item></span></li></template>
+        </ul>
+        <div class="price">
+            <small>all of it, from</small>
+            <strong data-brand="offer.price"></strong>
+            <span class="cta">Book a free call<svg class="icon"><use href="#i-arrow"/></svg></span>
+        </div>
+    </div>
+</section>
+
+<!-- 3. Instagram / Facebook / TikTok story -->
+<section class="board story" data-export="ad-story">
+    <span class="ring ring--a"></span><span class="ring ring--b"></span>
+    <div class="brandline"><span class="wordmark" data-wordmark></span><small data-brand="role"></small></div>
+    <p class="kicker">Hey, small business owner</p>
+    <h1 class="hl">One creative partner for <em>everything online.</em></h1>
+    <div class="panel">
+        <ul class="list">
+            <li><svg class="icon"><use href="#i-code"/></svg>Websites</li>
+            <li><svg class="icon"><use href="#i-app"/></svg>Web apps</li>
+            <li><svg class="icon"><use href="#i-search"/></svg>SEO</li>
+            <li><svg class="icon"><use href="#i-megaphone"/></svg>Content</li>
+            <li><svg class="icon"><use href="#i-pen"/></svg>Graphic design</li>
+            <li><svg class="icon"><use href="#i-video"/></svg>Photo &amp; video</li>
+        </ul>
+    </div>
+    <div class="book">
+        <div class="qr" data-qr="#16131f"></div>
+        <div>
+            <p>Book a free consultation</p>
+            <span>Scan, tap the link in bio or visit <b data-brand="website"></b></span>
+        </div>
+    </div>
+</section>
+
+<!-- 4a. Facebook / LinkedIn link ad (1200×628) -->
+<section class="board wide wide--628" data-export="ad-landscape">
+    <span class="orb orb--a"></span>
+    <div>
+        <div class="brandline"><span class="wordmark" data-wordmark></span><small data-brand="role"></small></div>
+        <h1 class="hl">Your small business, online and <em>impossible to miss.</em></h1>
+        <div class="chips">
+            <span class="chip"><svg class="icon"><use href="#i-code"/></svg>Websites</span>
+            <span class="chip"><svg class="icon"><use href="#i-search"/></svg>SEO</span>
+            <span class="chip"><svg class="icon"><use href="#i-megaphone"/></svg>Content</span>
+            <span class="chip"><svg class="icon"><use href="#i-pen"/></svg>Design</span>
+            <span class="chip"><svg class="icon"><use href="#i-camera"/></svg>Photo &amp; video</span>
+        </div>
+    </div>
+    <div class="side">
+        <div class="qr" data-qr="#16131f"></div>
+        <p>Book a free consultation<span data-brand="website"></span></p>
+    </div>
+</section>
+
+<!-- 4b. Website social preview (Open Graph, 1200×630) -->
+<section class="board wide wide--630" data-export="og-image">
+    <span class="orb orb--a"></span>
+    <div>
+        <div class="brandline"><span class="wordmark" data-wordmark></span><small data-brand="role"></small></div>
+        <h1 class="hl">Your small business, online and <em>impossible to miss.</em></h1>
+        <div class="chips">
+            <span class="chip"><svg class="icon"><use href="#i-code"/></svg>Websites</span>
+            <span class="chip"><svg class="icon"><use href="#i-search"/></svg>SEO</span>
+            <span class="chip"><svg class="icon"><use href="#i-megaphone"/></svg>Content</span>
+            <span class="chip"><svg class="icon"><use href="#i-pen"/></svg>Design</span>
+            <span class="chip"><svg class="icon"><use href="#i-camera"/></svg>Photo &amp; video</span>
+        </div>
+    </div>
+    <div class="side">
+        <div class="qr" data-qr="#16131f"></div>
+        <p>Book a free consultation<span data-brand="website"></span></p>
+    </div>
+</section>
+
+<script src="../brand.js"></script>
+<script src="../lib/qrcode.js"></script>
+<script src="../lib/fill.js"></script>
+</body>
+</html>
