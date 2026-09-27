@@ -1,0 +1,17 @@
+/*
+Theme Name: Deea Creative
+Theme URI: https://github.com/Deea0210/Deea0210
+Author: Deea
+Author URI: https://github.com/Deea0210
+Description: A bold one-page theme for a web developer, SEO specialist, content creator, graphic designer, photographer and videographer. Landing page with services, a small-business offer, process, about and FAQ sections, plus a clean blog. Services are managed in WP Admin → Services and every "Book" button links to your booking app.
+Version: 1.0.0
+Requires at least: 6.2
+Tested up to: 6.8
+Requires PHP: 8.0
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: deea
+Tags: one-column, custom-logo, custom-menu, featured-images, blog, portfolio, translation-ready
+*/
+
+/* Styles live in assets/css/app.css (shared with the booking app) and assets/css/theme.css. */
