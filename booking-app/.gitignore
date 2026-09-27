@@ -1,0 +1,4 @@
+config.local.php
+storage/*
+!storage/.htaccess
+!storage/index.php
