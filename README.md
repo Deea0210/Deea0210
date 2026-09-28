@@ -7,6 +7,7 @@ services for small businesses:
 | --- | --- |
 | [`booking-app/`](booking-app/) | **Landing page + online booking web app** (PHP & MySQL, runs on XAMPP). Clients pick a service like "Make me a website", choose a free time in a live calendar and get a confirmation email with a private manage/cancel link. You manage bookings, services, prices and opening hours in the admin panel. |
 | [`wordpress-theme/`](wordpress-theme/) | **WordPress theme** with the same design: landing page, services editable in WP Admin, blog, and "Book" buttons that link to the booking app. Upload `deea.zip` in WordPress. |
+| [`blade-boost/`](blade-boost/) | **BladeBoost**, a Windows app for the Razer Blade 15 (Late 2020) that replaces Razer Synapse: CPU/GPU temperatures, performance modes, manual fan speed, and a Game Mode that pauses background services and apps with one-click **Restore**. Download `BladeBoost.exe` from the Releases page. |
 | [`marketing/`](marketing/) | **Business card** (print-ready PDF, EU and US sizes), **social media ads** (feed, story, link ad), an **A5 flyer** for small businesses, and ready-to-paste **ad copy** for Meta, Google Ads and Google Business Profile. |
 
 ## Quick start with XAMPP

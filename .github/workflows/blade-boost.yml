@@ -1,0 +1,46 @@
+name: BladeBoost
+
+# Builds the Windows app and publishes it as a download on the repository's Releases page.
+on:
+  push:
+    paths:
+      - "blade-boost/**"
+      - ".github/workflows/blade-boost.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build BladeBoost.exe
+        run: dotnet publish blade-boost/src/BladeBoost/BladeBoost.csproj -c Release -r win-x64 -o out
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path out/BladeBoost.exe -DestinationPath out/BladeBoost-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BladeBoost-win-x64
+          path: out/BladeBoost.exe
+
+      - name: Publish the download (Releases → "BladeBoost (latest build)")
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete bladeboost-latest --yes --cleanup-tag || true
+          gh release create bladeboost-latest out/BladeBoost.exe out/BladeBoost-win-x64.zip \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "BladeBoost (latest build)" \
+            --notes "Fan control, CPU/GPU temperatures and a reversible Game Mode for the Razer Blade 15 Base (Late 2020), without Razer Synapse. Download **BladeBoost.exe** (or the .zip if your browser blocks .exe files). Built from ${{ github.sha }}. See blade-boost/README.md for setup."

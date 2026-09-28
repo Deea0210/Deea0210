@@ -1,0 +1,291 @@
+<Window x:Class="BladeBoost.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BladeBoost" Width="1200" Height="820" MinWidth="1000" MinHeight="640"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
+        FontFamily="{StaticResource Body}" FontSize="13"
+        Icon="pack://application:,,,/Assets/BladeBoost.ico"
+        WindowStartupLocation="CenterScreen" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+
+    <Grid Margin="24,20,24,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <DockPanel Margin="0,0,0,16">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{Binding LaptopModeText}" Style="{StaticResource Muted}" Margin="0,0,18,0" VerticalAlignment="Center" />
+                <Button Content="Open log" Style="{StaticResource LinkButton}" Command="{Binding OpenLogCommand}" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="40" Height="40" CornerRadius="11" Background="{StaticResource Card2}" Margin="0,0,12,0">
+                    <Image Source="pack://application:,,,/Assets/BladeBoost.ico" Width="30" Height="30" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource H1}" FontSize="22">
+                        <Run Text="Blade" /><Run Text="Boost" Foreground="{StaticResource Accent}" />
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Margin="0,1,7,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{StaticResource Warn}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLaptopConnected}" Value="True">
+                                            <Setter Property="Fill" Value="{StaticResource Accent}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding DeviceStatus}" Style="{StaticResource Muted}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Banners -->
+        <StackPanel Grid.Row="1">
+            <Border Background="{StaticResource WarnSoft}" BorderBrush="{StaticResource Warn}" BorderThickness="1" CornerRadius="12"
+                    Padding="16,12" Margin="0,0,0,14" Visibility="{Binding ShowPawnIoBanner, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Install PawnIO" Style="{StaticResource PrimaryButton}" Command="{Binding InstallPawnIoCommand}" Margin="12,0,0,0" />
+                    <TextBlock TextWrapping="Wrap" VerticalAlignment="Center">
+                        <Run Text="CPU temperature needs PawnIO" FontWeight="SemiBold" />
+                        <Run Text=" — a free, Microsoft-signed sensor driver (used by LibreHardwareMonitor and Fan Control). GPU temperature already works." Foreground="{StaticResource Muted}" />
+                    </TextBlock>
+                </DockPanel>
+            </Border>
+            <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1" CornerRadius="12"
+                    Padding="16,12" Margin="0,0,0,14" Visibility="{Binding IsGameModeActive, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Restore now" Style="{StaticResource PrimaryButton}" Command="{Binding RestoreCommand}" Margin="12,0,0,0" />
+                    <TextBlock TextWrapping="Wrap" VerticalAlignment="Center">
+                        <Run Text="Game Mode is on." FontWeight="SemiBold" />
+                        <Run Text=" Paused services and closed apps come back when you press Restore." Foreground="{StaticResource Muted}" />
+                    </TextBlock>
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="1.15*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left column -->
+                <StackPanel>
+                    <!-- Temperatures -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Temperatures" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding FanText}" Style="{StaticResource Muted}" />
+                            <UniformGrid Columns="2" Margin="0,14,0,0">
+                                <!-- CPU -->
+                                <Border Background="{StaticResource Card2}" CornerRadius="12" Padding="16" Margin="0,0,8,0">
+                                    <StackPanel>
+                                        <TextBlock Text="CPU" Style="{StaticResource Muted}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding CpuName}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding CpuTempText}" Foreground="{Binding CpuTempBrush}" Style="{StaticResource BigNumber}" Margin="0,6,0,0" />
+                                        <TextBlock Text="{Binding CpuDetail}" Style="{StaticResource Muted}" />
+                                        <Viewbox Height="54" Margin="0,12,0,0" Stretch="Fill">
+                                            <Canvas Width="260" Height="54" ClipToBounds="True">
+                                                <Line X1="0" X2="260" Y1="27" Y2="27" Stroke="{StaticResource Line}" StrokeThickness="1" StrokeDashArray="3,3" />
+                                                <Polyline Points="{Binding CpuGraph}" Stroke="{Binding CpuTempBrush}" StrokeThickness="2" StrokeLineJoin="Round" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </StackPanel>
+                                </Border>
+                                <!-- GPU -->
+                                <Border Background="{StaticResource Card2}" CornerRadius="12" Padding="16" Margin="8,0,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="GPU" Style="{StaticResource Muted}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding GpuName}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding GpuTempText}" Foreground="{Binding GpuTempBrush}" Style="{StaticResource BigNumber}" Margin="0,6,0,0" />
+                                        <TextBlock Text="{Binding GpuDetail}" Style="{StaticResource Muted}" />
+                                        <Viewbox Height="54" Margin="0,12,0,0" Stretch="Fill">
+                                            <Canvas Width="260" Height="54" ClipToBounds="True">
+                                                <Line X1="0" X2="260" Y1="27" Y2="27" Stroke="{StaticResource Line}" StrokeThickness="1" StrokeDashArray="3,3" />
+                                                <Polyline Points="{Binding GpuGraph}" Stroke="{Binding GpuTempBrush}" StrokeThickness="2" StrokeLineJoin="Round" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+                            <TextBlock Text="Last 60 seconds · green under 75°C, amber when warm, red when hot" Style="{StaticResource Muted}" FontSize="11" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Memory -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Memory (RAM)" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding MemoryUsedText}" FontWeight="SemiBold" Margin="0,6,0,8" />
+                            <ProgressBar Value="{Binding MemoryPercent}" Maximum="100" />
+                            <TextBlock Text="{Binding MemoryDetail}" Style="{StaticResource Muted}" Margin="0,8,0,0" />
+                            <WrapPanel Margin="0,14,0,0">
+                                <Button Content="Free cached memory" Style="{StaticResource BaseButton}" Command="{Binding PurgeStandbyCommand}" Margin="0,0,8,0" />
+                                <Button Content="Trim app memory" Style="{StaticResource BaseButton}" Command="{Binding TrimMemoryCommand}" />
+                            </WrapPanel>
+                            <TextBlock Style="{StaticResource Muted}" FontSize="11.5" Margin="0,10,0,0"
+                                       Text="Honest note: Windows already gives free and cached memory to your game. Closing background apps (Game Mode) frees the most; these buttons are a small extra." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Right column -->
+                <StackPanel Grid.Column="2">
+                    <!-- Performance & fans -->
+                    <Border Style="{StaticResource CardBorder}" IsEnabled="{Binding IsLaptopConnected}">
+                        <StackPanel>
+                            <TextBlock Text="Performance &amp; fans" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="Replaces Synapse's performance settings. Changes apply when you press Apply." Style="{StaticResource Muted}" />
+
+                            <TextBlock Text="PERFORMANCE MODE" Style="{StaticResource Label}" />
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Balanced" GroupName="mode" Style="{StaticResource Segment}" IsChecked="{Binding IsBalanced}" />
+                                <RadioButton Content="Gaming" GroupName="mode" Style="{StaticResource Segment}" IsChecked="{Binding IsGaming}" />
+                                <RadioButton Content="Custom" GroupName="mode" Style="{StaticResource Segment}" IsChecked="{Binding IsCustom}" />
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsCustom, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="CPU BOOST" Style="{StaticResource Label}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Low" GroupName="cpu" Style="{StaticResource Segment}" IsChecked="{Binding CpuLow}" />
+                                    <RadioButton Content="Medium" GroupName="cpu" Style="{StaticResource Segment}" IsChecked="{Binding CpuMedium}" />
+                                    <RadioButton Content="High" GroupName="cpu" Style="{StaticResource Segment}" IsChecked="{Binding CpuHigh}" />
+                                    <RadioButton Content="Boost" GroupName="cpu" Style="{StaticResource Segment}" IsChecked="{Binding CpuBoostMax}"
+                                                 Visibility="{Binding CanCpuBoost, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                                <TextBlock Text="GPU BOOST" Style="{StaticResource Label}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Low" GroupName="gpu" Style="{StaticResource Segment}" IsChecked="{Binding GpuLow}" />
+                                    <RadioButton Content="Medium" GroupName="gpu" Style="{StaticResource Segment}" IsChecked="{Binding GpuMedium}" />
+                                    <RadioButton Content="High" GroupName="gpu" Style="{StaticResource Segment}" IsChecked="{Binding GpuHigh}" />
+                                </StackPanel>
+                                <TextBlock Text="In Custom mode the laptop controls the fans automatically." Style="{StaticResource Muted}" Margin="0,8,0,0" />
+                            </StackPanel>
+
+                            <StackPanel IsEnabled="{Binding CanUseManualFans}">
+                                <TextBlock Text="FANS" Style="{StaticResource Label}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Automatic" GroupName="fan" Style="{StaticResource Segment}" IsChecked="{Binding AutoFans}" />
+                                    <RadioButton Content="Manual" GroupName="fan" Style="{StaticResource Segment}" IsChecked="{Binding ManualFans}" />
+                                </StackPanel>
+                                <Grid Margin="0,14,0,0" Visibility="{Binding ManualFans, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Minimum="{Binding FanMin}" Maximum="{Binding FanMax}" Value="{Binding FanRpmSlider}"
+                                            SmallChange="100" LargeChange="200" TickFrequency="100" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding FanRpmText}" FontWeight="SemiBold" Margin="14,0,0,0" MinWidth="80" VerticalAlignment="Center" />
+                                </Grid>
+                            </StackPanel>
+
+                            <WrapPanel Margin="0,18,0,0">
+                                <Button Content="Apply" Style="{StaticResource PrimaryButton}" Command="{Binding ApplyCommand}" MinWidth="110" Margin="0,0,8,0" />
+                                <Button Content="Fans to max" Style="{StaticResource BaseButton}" Command="{Binding MaxFansCommand}" Margin="0,0,8,0" />
+                                <Button Content="Fans to automatic" Style="{StaticResource BaseButton}" Command="{Binding AutoFansCommand}" />
+                            </WrapPanel>
+                            <TextBlock Text="{Binding SafetyText}" Style="{StaticResource Muted}" FontSize="11.5" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Game Mode -->
+                    <Border Style="{StaticResource CardBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Game Mode" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="Before you play: pauses background services, closes background apps and frees memory. After: Restore puts everything back exactly as it was." Style="{StaticResource Muted}" />
+
+                            <UniformGrid Columns="2" Margin="0,16,0,0">
+                                <Button Content="▶  Start Game Mode" Style="{StaticResource BigButton}" Command="{Binding StartGameModeCommand}" Margin="0,0,6,0" />
+                                <Button Content="↺  Restore" Style="{StaticResource BigButton}" Background="{StaticResource Card2}" BorderBrush="{StaticResource Line}"
+                                        Foreground="{StaticResource Text}" Command="{Binding RestoreCommand}" Margin="6,0,0,0" />
+                            </UniformGrid>
+
+                            <!-- Log of what Game Mode did -->
+                            <ItemsControl ItemsSource="{Binding GameModeLog}" Margin="0,12,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StringFormat='• {0}'}" Style="{StaticResource Muted}" Margin="0,1" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Style="{StaticResource LinkButton}" Command="{Binding ToggleDetailsCommand}" Margin="0,14,0,0" HorizontalAlignment="Left">
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Choose what Game Mode does ▾" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ShowDetails}" Value="True">
+                                                    <Setter Property="Text" Value="Hide options ▴" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+
+                            <StackPanel Visibility="{Binding ShowDetails, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="OPTIONS" Style="{StaticResource Label}" />
+                                <CheckBox Content="Set Windows power mode to Best performance" IsChecked="{Binding BestPerformancePower}" />
+                                <CheckBox Content="Switch the Razer performance mode to Gaming" IsChecked="{Binding GamingPerformanceMode}" />
+                                <CheckBox Content="Free cached (standby) memory" IsChecked="{Binding PurgeStandby}" />
+                                <CheckBox Content="Trim app memory (can cause a brief stutter while apps reload)" IsChecked="{Binding TrimAppMemory}" />
+                                <CheckBox Content="Reopen closed apps when I press Restore" IsChecked="{Binding ReopenApps}" />
+
+                                <TextBlock Text="SERVICES TO PAUSE" Style="{StaticResource Label}" />
+                                <ItemsControl ItemsSource="{Binding Services}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsChecked}" ToolTip="{Binding Key}">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}" />
+                                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="11.5" />
+                                                </StackPanel>
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="APPS TO CLOSE" Style="{StaticResource Label}" />
+                                <ItemsControl ItemsSource="{Binding Apps}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="2" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Title}" IsChecked="{Binding IsChecked}" ToolTip="{Binding Subtitle}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="Other apps to close (program names, comma separated, e.g. Slack, obs64)" Style="{StaticResource Muted}" Margin="0,10,0,6" />
+                                <TextBox Text="{Binding ExtraApps, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource Muted}" FontSize="11.5" Margin="0,10,0,0"
+                                           Text="Security, network, audio, display and driver services are never touched. A Windows restart also brings every service back." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBlock DockPanel.Dock="Right" Text="Minimize to keep BladeBoost running next to the clock" Style="{StaticResource Muted}" FontSize="11.5" />
+            <TextBlock Text="{Binding StatusText}" Style="{StaticResource Muted}" />
+        </DockPanel>
+    </Grid>
+</Window>
