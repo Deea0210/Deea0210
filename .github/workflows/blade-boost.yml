@@ -24,6 +24,19 @@ jobs:
       - name: Build BladeBoost.exe
         run: dotnet publish blade-boost/src/BladeBoost/BladeBoost.csproj -c Release -r win-x64 -o out
 
+      - name: Smoke test (the app must start and keep running)
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:LOCALAPPDATA "BladeBoost\log.txt"
+          $p = Start-Process -FilePath out/BladeBoost.exe -PassThru
+          Start-Sleep -Seconds 25
+          $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
+          Write-Host "---- BladeBoost log ----`n$text"
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          if ($p.HasExited -and $p.ExitCode -ne 0 -and $p.ExitCode -ne -1) { throw "BladeBoost exited during startup (exit code $($p.ExitCode))" }
+          if ($text -notmatch "BladeBoost started") { throw "BladeBoost did not reach startup" }
+          if ($text -match "FATAL|ERROR UI|ERROR opening the window") { throw "BladeBoost reported a startup error" }
+
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path out/BladeBoost.exe -DestinationPath out/BladeBoost-win-x64.zip

@@ -40,8 +40,19 @@ public partial class MainWindow : Window
 
     private static System.Drawing.Icon LoadIcon()
     {
-        var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/BladeBoost.ico"));
-        return resource != null ? new System.Drawing.Icon(resource.Stream) : System.Drawing.SystemIcons.Application;
+        try
+        {
+            var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/BladeBoost.ico"));
+            if (resource != null)
+            {
+                return new System.Drawing.Icon(resource.Stream, 16, 16);
+            }
+        }
+        catch (Exception ex)
+        {
+            Core.Log.Error("loading tray icon", ex);
+        }
+        return System.Drawing.SystemIcons.Application;
     }
 
     private void OnStateChanged(object? sender, EventArgs e)

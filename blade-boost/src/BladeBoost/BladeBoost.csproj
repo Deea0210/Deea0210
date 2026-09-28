@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\BladeBoost.ico" />
+    <Resource Include="Assets\BladeBoost.png" />
   </ItemGroup>
 
 </Project>

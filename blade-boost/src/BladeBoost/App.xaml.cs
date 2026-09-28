@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,6 +11,17 @@ namespace BladeBoost;
 public partial class App : Application
 {
     private Mutex? _singleInstance;
+
+    public App()
+    {
+        // Registered before the XAML resources load, so even a startup failure is reported instead of silently exiting.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            Log.Write($"FATAL {args.ExceptionObject}");
+            var message = (args.ExceptionObject as Exception)?.Message ?? args.ExceptionObject?.ToString() ?? "Unknown error";
+            NativeMessageBox($"BladeBoost couldn't start:\n\n{message}\n\nDetails were saved to {AppPaths.LogFile}");
+        };
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -24,7 +36,6 @@ public partial class App : Application
         }
 
         DispatcherUnhandledException += OnUiException;
-        AppDomain.CurrentDomain.UnhandledException += (_, args) => Log.Write($"FATAL {args.ExceptionObject}");
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             Log.Error("background task", args.Exception);
@@ -33,7 +44,20 @@ public partial class App : Application
 
         Log.Write("BladeBoost started");
         base.OnStartup(e);
-        new MainWindow().Show();
+
+        try
+        {
+            var window = new MainWindow();
+            MainWindow = window;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("opening the window", ex);
+            MessageBox.Show($"BladeBoost couldn't open its window:\n\n{ex.Message}\n\nDetails were saved to {AppPaths.LogFile}",
+                "BladeBoost", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     private static void OnUiException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -49,5 +73,21 @@ public partial class App : Application
         Log.Write("BladeBoost closed");
         _singleInstance?.Dispose();
         base.OnExit(e);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "MessageBoxW")]
+    private static extern int MessageBoxNative(IntPtr owner, string text, string caption, uint type);
+
+    /// <summary>Plain Windows message box that works even when WPF itself failed to load.</summary>
+    private static void NativeMessageBox(string text)
+    {
+        try
+        {
+            MessageBoxNative(IntPtr.Zero, text, "BladeBoost", 0x10 /* MB_ICONERROR */);
+        }
+        catch
+        {
+            // Nothing else we can do.
+        }
     }
 }

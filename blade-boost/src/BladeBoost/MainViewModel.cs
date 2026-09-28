@@ -127,38 +127,57 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task SensorLoop()
     {
-        try
-        {
-            _sensors = new SensorService();
-        }
-        catch (Exception ex)
-        {
-            Log.Error("starting sensors", ex);
-            return;
-        }
-
+        _sensors = new SensorService();
         var tick = 0;
         while (!_stop.IsCancellationRequested)
         {
+            // Each part is read separately so one failing source doesn't blank the others.
+            var reading = SensorReading.Empty;
             try
             {
-                var reading = _sensors.Read();
-                var memory = MemoryManager.Read();
-                RazerState? state = null;
-                if (tick++ % 3 == 0)
+                reading = _sensors.Read();
+            }
+            catch (Exception ex)
+            {
+                LogOnce("reading sensors", ex);
+            }
+
+            MemoryInfo? memory = null;
+            try
+            {
+                memory = MemoryManager.Read();
+            }
+            catch (Exception ex)
+            {
+                LogOnce("reading memory", ex);
+            }
+
+            RazerState? state = null;
+            if (tick++ % 3 == 0)
+            {
+                try
                 {
                     lock (_laptopGate)
                     {
                         state = _laptop?.ReadState();
                     }
                 }
+                catch (Exception ex)
+                {
+                    LogOnce("reading fan state", ex);
+                }
+            }
+
+            try
+            {
                 CheckSafety(reading);
-                Ui(() => ShowReading(reading, memory, state));
             }
             catch (Exception ex)
             {
-                Log.Error("reading sensors", ex);
+                LogOnce("fan safety", ex);
             }
+
+            Ui(() => ShowReading(reading, memory, state));
 
             try
             {
@@ -168,6 +187,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 break;
             }
+        }
+    }
+
+    private readonly HashSet<string> _loggedErrors = new();
+
+    /// <summary>Logs a repeating background error once instead of every second.</summary>
+    private void LogOnce(string context, Exception ex)
+    {
+        if (_loggedErrors.Add(context + ex.GetType().Name + ex.Message))
+        {
+            Log.Error(context, ex);
         }
     }
 
@@ -206,7 +236,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     // ---------- Sensors ----------
 
-    private void ShowReading(SensorReading r, MemoryInfo m, RazerState? state)
+    private void ShowReading(SensorReading r, MemoryInfo? m, RazerState? state)
     {
         CpuName = Shorten(r.CpuName);
         GpuName = Shorten(r.GpuName);
@@ -220,9 +250,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         GpuGraph = Push(_gpuHistory, r.GpuTemp);
         CpuTempMissing = !r.CpuTemp.HasValue;
 
-        MemoryPercent = m.LoadPercent;
-        MemoryUsedText = $"{m.InUseGb:0.0} GB of {m.TotalGb:0} GB in use";
-        MemoryDetail = $"{m.StandbyGb:0.0} GB cached (standby) · {m.FreeGb:0.0} GB free";
+        if (m != null)
+        {
+            MemoryPercent = m.LoadPercent;
+            MemoryUsedText = $"{m.InUseGb:0.0} GB of {m.TotalGb:0} GB in use";
+            MemoryDetail = $"{m.StandbyGb:0.0} GB cached (standby) · {m.FreeGb:0.0} GB free";
+        }
 
         if (state != null)
         {
@@ -581,10 +614,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _isBusy;
     public bool IsBusy { get => _isBusy; set { if (Set(ref _isBusy, value)) CommandManager.InvalidateRequerySuggested(); } }
 
-    private string _cpuName = "CPU";
+    private string _cpuName = "";
     public string CpuName { get => _cpuName; set => Set(ref _cpuName, value); }
 
-    private string _gpuName = "GPU";
+    private string _gpuName = "";
     public string GpuName { get => _gpuName; set => Set(ref _gpuName, value); }
 
     private string _cpuTempText = "—";

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using BladeBoost.Core;
 using LibreHardwareMonitor.Hardware;
@@ -15,7 +14,10 @@ public sealed record SensorReading(
     float? GpuTemp,
     float? GpuLoad,
     float? GpuClock,
-    string GpuName);
+    string GpuName)
+{
+    public static readonly SensorReading Empty = new(null, null, null, "", null, null, null, "");
+}
 
 /// <summary>
 /// Reads CPU and GPU sensors with LibreHardwareMonitor. CPU temperatures need
@@ -24,13 +26,8 @@ public sealed record SensorReading(
 /// </summary>
 public sealed class SensorService : IDisposable
 {
-    private readonly Computer _computer;
-    private bool _opened;
-
-    public SensorService()
-    {
-        _computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = true };
-    }
+    private Computer? _computer;
+    private bool _unavailable;
 
     public static bool IsPawnIoInstalled()
     {
@@ -45,44 +42,89 @@ public sealed class SensorService : IDisposable
         }
     }
 
+    /// <summary>Opens the sensors; if the GPU part fails on this PC, falls back to CPU-only.</summary>
+    private Computer? Open()
+    {
+        if (_computer != null || _unavailable)
+        {
+            return _computer;
+        }
+        foreach (var withGpu in new[] { true, false })
+        {
+            var computer = new Computer { IsCpuEnabled = true, IsGpuEnabled = withGpu };
+            try
+            {
+                computer.Open();
+                Log.Write(withGpu ? "Sensors ready" : "Sensors ready (CPU only)");
+                return _computer = computer;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(withGpu ? "opening sensors (retrying without GPU sensors)" : "opening sensors", ex);
+                try
+                {
+                    computer.Close();
+                }
+                catch
+                {
+                    // Ignore: it never opened properly.
+                }
+            }
+        }
+        _unavailable = true;
+        return null;
+    }
+
     public SensorReading Read()
     {
-        if (!_opened)
+        var computer = Open();
+        if (computer == null)
         {
-            _computer.Open();
-            _opened = true;
+            return SensorReading.Empty;
         }
 
         IHardware? cpu = null;
         IHardware? gpu = null;
-        foreach (var hardware in _computer.Hardware)
+        IHardware? integratedGpu = null;
+        foreach (var hardware in computer.Hardware)
         {
-            hardware.Update();
-            foreach (var sub in hardware.SubHardware)
+            try
             {
-                sub.Update();
+                hardware.Update();
+                foreach (var sub in hardware.SubHardware)
+                {
+                    sub.Update();
+                }
             }
-            if (hardware.HardwareType == HardwareType.Cpu && cpu == null)
+            catch
             {
-                cpu = hardware;
+                continue; // one flaky sensor shouldn't hide the others
             }
-            // Prefer the dedicated NVIDIA/AMD GPU over the integrated Intel one.
-            if (hardware.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd)
+            switch (hardware.HardwareType)
             {
-                gpu ??= hardware;
+                case HardwareType.Cpu:
+                    cpu ??= hardware;
+                    break;
+                // Prefer the dedicated NVIDIA/AMD GPU over the integrated Intel one.
+                case HardwareType.GpuNvidia or HardwareType.GpuAmd:
+                    gpu ??= hardware;
+                    break;
+                case HardwareType.GpuIntel:
+                    integratedGpu ??= hardware;
+                    break;
             }
         }
-        gpu ??= _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuIntel);
+        gpu ??= integratedGpu;
 
         return new SensorReading(
             CpuTemp: Find(cpu, SensorType.Temperature, "CPU Package", "Core (Tctl/Tdie)", "Core Max", "Core Average"),
             CpuLoad: Find(cpu, SensorType.Load, "CPU Total"),
             CpuPower: Find(cpu, SensorType.Power, "CPU Package", "Package"),
-            CpuName: cpu?.Name ?? "CPU",
+            CpuName: cpu?.Name ?? "",
             GpuTemp: Find(gpu, SensorType.Temperature, "GPU Core", "GPU Hot Spot"),
             GpuLoad: Find(gpu, SensorType.Load, "GPU Core", "D3D 3D"),
             GpuClock: Find(gpu, SensorType.Clock, "GPU Core"),
-            GpuName: gpu?.Name ?? "GPU");
+            GpuName: gpu?.Name ?? "");
     }
 
     private static float? Find(IHardware? hardware, SensorType type, params string[] names)
@@ -109,10 +151,7 @@ public sealed class SensorService : IDisposable
     {
         try
         {
-            if (_opened)
-            {
-                _computer.Close();
-            }
+            _computer?.Close();
         }
         catch (Exception ex)
         {
