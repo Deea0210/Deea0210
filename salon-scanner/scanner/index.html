@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#111111">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Ticket Scanner</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- Camera -->
+<section class="screen screen--camera" id="camera" hidden>
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+
+    <header class="topbar">
+        <strong class="topbar__title">Ticket Scanner</strong>
+        <button class="chip" id="outbox-chip" type="button" hidden></button>
+        <button class="icon-btn" id="torch-btn" type="button" aria-label="Torch" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8l-2 6v3l-2 11-2-11V8z"/></svg>
+        </button>
+        <button class="icon-btn" id="settings-btn" type="button" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+    </header>
+
+    <footer class="camera-bar">
+        <p class="hint" id="hint" aria-live="polite">Starting camera…</p>
+        <div class="camera-bar__actions">
+            <label class="link-btn">
+                <input type="file" accept="image/*" capture="environment" id="file-input" hidden>
+                Choose photo
+            </label>
+            <button class="shutter" id="shutter" type="button" aria-label="Scan now"><span></span></button>
+            <span></span>
+        </div>
+    </footer>
+</section>
+
+<!-- Working -->
+<section class="screen screen--busy" id="busy" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Reading the ticket…</p>
+</section>
+
+<!-- Review -->
+<section class="screen screen--review" id="review" hidden>
+    <header class="review-head">
+        <button class="text-btn" id="retake-btn" type="button">← Retake</button>
+        <strong>Check &amp; send</strong>
+        <span></span>
+    </header>
+
+    <div class="review-body">
+        <img class="ticket-img" id="ticket-img" alt="Straightened photo of the ticket">
+
+        <div class="notice" id="review-notice" hidden></div>
+
+        <h2 class="section-title">Services <span id="ticked-count" class="muted"></span></h2>
+        <ul class="service-list" id="ticked-list"></ul>
+        <button class="text-btn text-btn--add" id="add-service-btn" type="button">+ Add or remove a service</button>
+
+        <div class="all-services" id="all-services" hidden></div>
+
+        <h2 class="section-title">Handwritten</h2>
+        <div class="fields" id="fields"></div>
+
+        <div class="total">
+            <span>Services total</span>
+            <strong id="total"></strong>
+        </div>
+    </div>
+
+    <footer class="review-foot">
+        <button class="btn btn--primary" id="send-btn" type="button">Send to reception</button>
+    </footer>
+</section>
+
+<!-- Settings -->
+<section class="screen screen--settings" id="settings" hidden>
+    <header class="review-head">
+        <button class="text-btn" id="settings-back" type="button">← Back</button>
+        <strong>Settings</strong>
+        <span></span>
+    </header>
+    <form class="settings-form" id="settings-form">
+        <p class="muted">These are saved on this phone only.</p>
+        <label class="field">
+            <span>Salon software address</span>
+            <input name="apiUrl" type="url" inputmode="url" placeholder="https://your-salon-software/scanner-api/tickets.php" required>
+        </label>
+        <label class="field">
+            <span>Scanner key</span>
+            <input name="apiKey" type="password" autocomplete="off" placeholder="Paste the key from your server" required>
+        </label>
+        <label class="field">
+            <span>This phone's name</span>
+            <input name="device" type="text" maxlength="60" placeholder="Reception P40">
+        </label>
+        <div class="settings-actions">
+            <button class="btn btn--primary" type="submit">Save</button>
+            <button class="btn" type="button" id="test-btn">Test connection</button>
+        </div>
+        <p class="notice" id="settings-status" hidden></p>
+        <p class="muted small">Ticket Scanner reads the ticks on the paper ticket and sends them to your salon software. Photos stay on this phone until they're sent.</p>
+    </form>
+</section>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="config.js"></script>
+<script src="template.js"></script>
+<script src="recognizer.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

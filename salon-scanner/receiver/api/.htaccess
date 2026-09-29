@@ -1,0 +1,6 @@
+# Pass the Authorization header through to PHP (some Apache + PHP-FPM setups drop it).
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>

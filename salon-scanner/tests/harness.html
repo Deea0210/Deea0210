@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Recognizer test harness</title>
+<!-- Used by run-accuracy.mjs: window.analyze(url) runs the same recognizer as the phone app on one photo. -->
+<script src="../scanner/template.js"></script>
+<script src="../scanner/recognizer.js"></script>
+<script>
+async function loadImage(url) {
+  const img = new Image(); img.src = url; await img.decode(); return img;
+}
+function toData(img, maxSide) {
+  const s = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  return { data: ctx.getImageData(0, 0, c.width, c.height), scale: s };
+}
+window.analyze = async (url, workSide) => {
+  const img = await loadImage(url);
+  const full = toData(img, 1e9), work = toData(img, workSide || 1600);
+  const t0 = performance.now();
+  const found = TicketRecognizer.findTicket(work.data, window.TICKET_TEMPLATE);
+  const t1 = performance.now();
+  if (!found.found) return { found: false, reason: found.reason, candidates: found.candidates, matched: found.matched, msFind: t1 - t0 };
+  const H = TicketRecognizer.scaleHomography(found.H, 1 / work.scale);
+  const ticks = TicketRecognizer.readTicks(full.data, H, window.TICKET_TEMPLATE);
+  return { found: true, matched: found.matched, rms: found.rms, candidates: found.candidates, msFind: t1 - t0, msRead: performance.now() - t1, ticks };
+};
+</script>
