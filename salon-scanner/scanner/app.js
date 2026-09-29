@@ -32,6 +32,48 @@
     let settings = loadSettings();
     const isConfigured = () => Boolean(settings.apiUrl && settings.apiKey);
 
+    // --------------------------------------------------------------- staff
+    // Stylists write their number in the "C" box (C281 = Renato). The list comes from
+    // the salon software (GET ?staff=1) and is kept on the phone for when it's offline.
+
+    const STAFF_KEY = 'ticketScanner.staff';
+    let staff = [];
+    try {
+        const cached = JSON.parse(localStorage.getItem(STAFF_KEY) || '[]');
+        if (Array.isArray(cached)) staff = cached;
+    } catch (e) { /* no cached list yet */ }
+
+    /** "281", "c 281" and "C281" all become "C281"; the same rule runs on the server. */
+    function normaliseStaffCode(value) {
+        const code = String(value || '').toUpperCase().replace(/\s+/g, '');
+        return /^\d+$/.test(code) ? 'C' + code : code;
+    }
+    const validStaffCode = (code) => /^[A-Z0-9-]{1,20}$/.test(code);
+    function findStaff(value) {
+        const code = normaliseStaffCode(value);
+        return code ? staff.find(s => normaliseStaffCode(s.code) === code) || null : null;
+    }
+
+    /** Loads the staff list; returns how many stylists came back, or null if it couldn't. */
+    async function refreshStaff(s) {
+        s = s || settings;
+        if (!s.apiUrl || !s.apiKey) return null;
+        try {
+            const url = s.apiUrl + (s.apiUrl.includes('?') ? '&' : '?') + 'staff=1';
+            const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.apiKey }, cache: 'no-store' });
+            if (!res.ok) return null; // keep the list we have
+            const body = await res.json();
+            if (!Array.isArray(body.staff)) return null;
+            staff = body.staff
+                .filter(x => x && x.code)
+                .map(x => ({ code: String(x.code).trim(), name: String(x.name || '').trim() }));
+            try { localStorage.setItem(STAFF_KEY, JSON.stringify(staff)); } catch (e) { /* kept in memory */ }
+            return staff.length;
+        } catch (e) {
+            return null; // offline: keep the cached list
+        }
+    }
+
     // ------------------------------------------------------------- helpers
 
     function show(id) {
@@ -409,7 +451,7 @@
             scannedAt: new Date(),
             detected,
             selected,
-            fields: { c: '', treatments: serviceCount ? String(serviceCount) : '', tips: '' },
+            fields: { staff: '', treatments: serviceCount ? String(serviceCount) : '', tips: '' },
             fieldImages,
             photo: ticketImage.toDataURL('image/jpeg', 0.8),
             ticketCanvas: ticketImage,
@@ -494,17 +536,68 @@
         $('add-service-btn').textContent = scan.showAll ? 'Hide full list' : '+ Add or remove a service';
 
         const fields = $('fields');
-        fields.replaceChildren(...T.fields.map(f => el('div', { class: 'field-card' },
+        fields.replaceChildren(...T.fields.map(f => (f.key === 'staff' ? staffCard(f) : el('div', { class: 'field-card' },
             el('img', { src: scan.fieldImages[f.key], alt: `Handwriting in the ${f.label} box` }),
             el('label', {},
                 f.label,
                 el('input', {
                     type: 'text',
-                    inputmode: f.key === 'c' ? 'text' : 'decimal',
+                    inputmode: 'decimal',
                     value: scan.fields[f.key] || '',
                     placeholder: f.key === 'tips' ? '£0.00' : '',
                     oninput: (e) => { scan.fields[f.key] = e.target.value; scan.fieldsEdited = true; },
-                })))));
+                }))))));
+        updateStaffStatus();
+    }
+
+    /** The "C" box: the stylist's handwritten number, a button per stylist, and a box to type it. */
+    function staffCard(f) {
+        const input = el('input', {
+            id: 'staff-input', type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: '20',
+            placeholder: 'e.g. 281', value: scan.fields.staff || '',
+            oninput: (e) => { scan.fields.staff = e.target.value; updateStaffStatus(); },
+        });
+        const chips = staff.map(s => el('button', {
+            class: 'staff-chip', type: 'button', 'data-code': s.code,
+            onclick: () => {
+                scan.fields.staff = s.code;
+                input.value = s.code;
+                updateStaffStatus();
+            },
+        }, el('b', {}, s.code), ' ', s.name));
+        return el('div', { class: 'field-card field-card--staff', id: 'staff-card' },
+            el('img', { src: scan.fieldImages[f.key], alt: 'Handwriting in the C box (stylist number)' }),
+            el('span', { class: 'field-card__title' }, 'Stylist', el('span', { class: 'muted' }, ' · C number')),
+            chips.length ? el('div', { class: 'staff-chips' }, ...chips) : null,
+            el('label', {}, chips.length ? 'Not in the list? Type the number' : 'C number', input),
+            el('p', { class: 'staff-status', id: 'staff-status', 'aria-live': 'polite' }));
+    }
+
+    function updateStaffStatus() {
+        const status = $('staff-status');
+        if (!status || !scan) return;
+        const typed = String(scan.fields.staff || '').trim();
+        const match = findStaff(typed);
+        for (const chip of document.querySelectorAll('.staff-chip')) {
+            chip.setAttribute('aria-pressed', String(Boolean(match) && chip.dataset.code === match.code));
+        }
+        let text = '', tone = '';
+        if (match) {
+            text = `✓ ${match.name || match.code}`;
+            tone = 'ok';
+        } else if (typed && !validStaffCode(normaliseStaffCode(typed))) {
+            text = 'Use only the number, e.g. 281';
+            tone = 'warn';
+        } else if (typed && staff.length) {
+            text = `${normaliseStaffCode(typed)} isn't in the staff list. Check the number.`;
+            tone = 'warn';
+        } else if (!typed && scan.askedStaff) {
+            text = 'Choose the stylist, or tap Send again to send without one.';
+            tone = 'warn';
+        }
+        status.textContent = text;
+        status.className = 'staff-status' + (tone ? ' staff-status--' + tone : '');
+        $('staff-card').classList.toggle('field-card--check', tone === 'warn');
     }
 
     $('add-service-btn').addEventListener('click', () => {
@@ -528,13 +621,20 @@
             };
         });
         const chosen = services.filter(s => s.ticked && s.price !== null);
+        const typed = String(scan.fields.staff || '').trim();
+        const match = findStaff(typed);
+        const stylist = match ? { code: match.code, name: match.name }
+            : typed ? { code: normaliseStaffCode(typed), name: '' } : null;
         return {
             scanId: scan.scanId,
             template: T.id,
             scannedAt: isoWithOffset(scan.scannedAt),
             device: settings.device || 'Reception phone',
             services,
-            fields: Object.fromEntries(Object.entries(scan.fields).map(([k, v]) => [k, String(v).trim()])),
+            fields: Object.assign(
+                Object.fromEntries(Object.entries(scan.fields).map(([k, v]) => [k, String(v).trim()])),
+                { staff: stylist ? stylist.code : '' }),
+            staff: stylist,
             fieldImages: scan.fieldImages,
             correctedByStaff: services.some(s => s.changedByStaff),
             totals: { services: chosen.length, amount: Math.round(chosen.reduce((s, x) => s + x.price, 0) * 100) / 100, currency: T.currency },
@@ -546,6 +646,17 @@
         if (!isConfigured()) {
             toast('Add the salon software address and key in Settings first');
             openSettings();
+            return;
+        }
+        const typedStaff = String(scan.fields.staff || '').trim();
+        if (typedStaff && !validStaffCode(normaliseStaffCode(typedStaff))) {
+            $('staff-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+        if (!typedStaff && !scan.askedStaff) {
+            scan.askedStaff = true; // ask once; a second tap sends without a stylist
+            updateStaffStatus();
+            $('staff-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
         const btn = $('send-btn');
@@ -597,6 +708,7 @@
         saveSettings(settings);
         toast('Settings saved');
         flushOutbox();
+        refreshStaff();
         show('camera');
     });
 
@@ -610,8 +722,11 @@
             const url = s.apiUrl + (s.apiUrl.includes('?') ? '&' : '?') + 'ping=1';
             const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.apiKey } });
             if (res.ok) {
+                const count = await refreshStaff(s);
                 status.className = 'notice notice--ok';
-                status.textContent = 'Connected. The salon software accepted the key.';
+                status.textContent = 'Connected. The salon software accepted the key. ' + (count
+                    ? `${count} stylist${count === 1 ? '' : 's'} loaded.`
+                    : 'No staff list yet, so reception will type the C number.');
             } else {
                 status.className = 'notice notice--error';
                 status.textContent = res.status === 401 ? 'Connected, but the key was refused.' : `The server answered with an error (${res.status}).`;
@@ -633,9 +748,11 @@
     });
 
     updateOutboxChip();
+    window.addEventListener('online', () => refreshStaff());
     if (isConfigured()) {
         show('camera');
         flushOutbox();
+        refreshStaff();
     } else {
         openSettings();
     }

@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS scanned_tickets (
     scanned_at         DATETIME     NOT NULL,                 -- when it was scanned, in the salon's local time
     scanned_at_utc     DATETIME     NOT NULL,
     device             VARCHAR(100) NOT NULL DEFAULT '',
-    field_c            VARCHAR(100) NOT NULL DEFAULT '',      -- the handwritten "C" box, as typed by staff
+    staff_code         VARCHAR(20)  NOT NULL DEFAULT '',      -- stylist number from the "C" box, e.g. C281 ('' if none)
+    staff_name         VARCHAR(100) NOT NULL DEFAULT '',      -- e.g. Renato ('' if the number isn't on the staff list)
     treatments         VARCHAR(20)  NOT NULL DEFAULT '',      -- "How many treatments"
     tips               DECIMAL(8,2) NULL,                     -- "Tips" in GBP (NULL if left empty)
     services_count     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS scanned_tickets (
     raw_payload        LONGTEXT     NOT NULL,                 -- everything the phone sent, minus the images
     PRIMARY KEY (id),
     UNIQUE KEY uq_scanned_tickets_scan (scan_id),
-    KEY idx_scanned_tickets_status (status, scanned_at)
+    KEY idx_scanned_tickets_status (status, scanned_at),
+    KEY idx_scanned_tickets_staff (staff_code, scanned_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS scanned_ticket_services (
@@ -36,3 +38,14 @@ CREATE TABLE IF NOT EXISTS scanned_ticket_services (
     KEY idx_scanned_ticket_services_ticket (ticket_id),
     CONSTRAINT fk_scanned_ticket_services_ticket FOREIGN KEY (ticket_id) REFERENCES scanned_tickets (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Stylists shown as buttons on the phone (the number they write in the "C" box).
+-- If your salon software already has a staff table, skip this table and point
+-- SCANNER_STAFF_SQL at yours instead (see receiver/config.php).
+CREATE TABLE IF NOT EXISTS scanner_staff (
+    code    VARCHAR(20)  NOT NULL,                            -- e.g. C281
+    name    VARCHAR(100) NOT NULL,                            -- e.g. Renato
+    active  TINYINT(1)   NOT NULL DEFAULT 1,
+    PRIMARY KEY (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- INSERT INTO scanner_staff (code, name) VALUES ('C281', 'Renato'), ('C646', 'Mohammad');

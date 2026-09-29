@@ -61,7 +61,7 @@ def photo(ticket, tpl, rng, index, hard=False):
     for i in ticked:
         draw_tick(img, tpl["boxes"][i]["rect"], rng)
     fields = {f["key"]: f["rect"] for f in tpl["fields"]}
-    draw_handwriting(img, fields["c"], str(rng.randint(10, 999)), rng)
+    draw_handwriting(img, fields["staff"], str(rng.randint(100, 999)), rng)
     draw_handwriting(img, fields["treatments"], str(len(ticked)), rng)
     draw_handwriting(img, fields["tips"], str(rng.choice([0, 2, 3, 5, 10])), rng)
 

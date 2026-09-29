@@ -5,6 +5,7 @@
  *   POST  JSON ticket from the phone      → 200 {"ok":true,"id":123}
  *         (the same scanId sent again     → 200 {"ok":true,"id":123,"duplicate":true})
  *   GET   ?ping=1                          → 200 {"ok":true}   (the phone's "Test connection")
+ *   GET   ?staff=1                         → 200 {"ok":true,"staff":[{"code":"C281","name":"Renato"},…]}
  *
  * Every request needs:  Authorization: Bearer <SCANNER_API_KEY>
  */
@@ -66,6 +67,39 @@ function image_bytes(mixed $dataUrl, int $maxBytes): ?string
     return $bytes;
 }
 
+function db(array $config): PDO
+{
+    try {
+        return new PDO($config['db_dsn'], $config['db_user'], $config['db_pass'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    } catch (PDOException $e) {
+        error_log('[ticket-scanner] database connection failed: ' . $e->getMessage());
+        fail(503, 'Database unavailable, the phone will retry');
+    }
+}
+
+/** Stylists from the salon software: [['code' => 'C281', 'name' => 'Renato'], …] */
+function staff_list(PDO $pdo, string $query): array
+{
+    $staff = [];
+    foreach ($pdo->query($query)->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $code = trim((string) ($row['code'] ?? ''));
+        if ($code !== '') {
+            $staff[] = ['code' => $code, 'name' => trim((string) ($row['name'] ?? ''))];
+        }
+    }
+    return $staff;
+}
+
+/** "281", "c 281" and "C281" all become "C281" (the phone uses the same rule). */
+function normalise_staff_code(string $value): string
+{
+    $code = strtoupper(preg_replace('/\s+/', '', $value));
+    return preg_match('/^\d+$/', $code) ? 'C' . $code : $code;
+}
+
 // ------------------------------------------------------------------- CORS
 // Only needed when the scanner page is served from a different domain.
 
@@ -104,6 +138,14 @@ if ($key === '' || !hash_equals($config['api_key'], $key)) {
 
 if ($method === 'GET' && isset($_GET['ping'])) {
     respond(200, ['ok' => true, 'service' => 'ticket-scanner-receiver']);
+}
+if ($method === 'GET' && isset($_GET['staff'])) {
+    try {
+        respond(200, ['ok' => true, 'staff' => staff_list(db($config), $config['staff_query'])]);
+    } catch (PDOException $e) {
+        error_log('[ticket-scanner] staff list query failed (check SCANNER_STAFF_SQL): ' . $e->getMessage());
+        fail(500, 'Could not load the staff list');
+    }
 }
 if ($method !== 'POST') {
     fail(405, 'Use POST');
@@ -179,7 +221,11 @@ foreach ($services as $i => $s) {
 }
 
 $fields = is_array($data['fields'] ?? null) ? $data['fields'] : [];
-$fieldC = str_field($fields, 'c', 100);
+$staffCode = normalise_staff_code(str_field($fields, 'staff', 20));
+if ($staffCode !== '' && !preg_match('/^[A-Z0-9-]{1,20}$/', $staffCode)) {
+    fail(400, '"fields.staff" must be a stylist number like C281');
+}
+$staffName = $staffCode !== '' && is_array($data['staff'] ?? null) ? str_field($data['staff'], 'name', 100) : '';
 $treatments = str_field($fields, 'treatments', 20);
 $tipsText = str_replace(['£', ',', ' '], ['', '.', ''], str_field($fields, 'tips', 20));
 if ($tipsText !== '' && !preg_match('/^\d{1,5}(\.\d{1,2})?$/', $tipsText)) {
@@ -197,15 +243,7 @@ foreach ((is_array($data['fieldImages'] ?? null) ? $data['fieldImages'] : []) as
 
 // ----------------------------------------------------------------- store
 
-try {
-    $pdo = new PDO($config['db_dsn'], $config['db_user'], $config['db_pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-} catch (PDOException $e) {
-    error_log('[ticket-scanner] database connection failed: ' . $e->getMessage());
-    fail(503, 'Database unavailable, the phone will retry');
-}
+$pdo = db($config);
 
 $existing = $pdo->prepare('SELECT id FROM scanned_tickets WHERE scan_id = ?');
 $existing->execute([$scanId]);
@@ -213,7 +251,22 @@ if ($id = $existing->fetchColumn()) {
     respond(200, ['ok' => true, 'id' => (int) $id, 'duplicate' => true]);
 }
 
-// Photos: <photo_dir>/<YYYY-MM>/<scanId>.jpg (+ _c.jpg, _tips.jpg …)
+// The stylist's name comes from the salon software's staff list when the number is on it.
+if ($staffCode !== '') {
+    try {
+        foreach (staff_list($pdo, $config['staff_query']) as $person) {
+            if (normalise_staff_code($person['code']) === $staffCode) {
+                $staffCode = mb_substr($person['code'], 0, 20);
+                $staffName = mb_substr($person['name'], 0, 100);
+                break;
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('[ticket-scanner] staff list query failed (check SCANNER_STAFF_SQL): ' . $e->getMessage());
+    }
+}
+
+// Photos: <photo_dir>/<YYYY-MM>/<scanId>.jpg (+ _staff.jpg, _tips.jpg …)
 $photoPath = null;
 if ($photo !== null || $fieldImages) {
     $folder = rtrim($config['photo_dir'], '/') . '/' . $scannedAt->format('Y-m');
@@ -241,12 +294,12 @@ try {
     $pdo->beginTransaction();
     $insert = $pdo->prepare(
         'INSERT INTO scanned_tickets
-            (scan_id, template, scanned_at, scanned_at_utc, device, field_c, treatments, tips,
+            (scan_id, template, scanned_at, scanned_at_utc, device, staff_code, staff_name, treatments, tips,
              services_count, services_total, corrected_by_staff, photo_path, raw_payload)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $insert->execute([
-        $scanId, $template, $scannedLocal, $scannedUtc, $device, $fieldC, $treatments, $tips,
+        $scanId, $template, $scannedLocal, $scannedUtc, $device, $staffCode, $staffName, $treatments, $tips,
         $serviceCount, round($total, 2), !empty($data['correctedByStaff']) ? 1 : 0, $photoPath,
         json_encode($audit, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
     ]);

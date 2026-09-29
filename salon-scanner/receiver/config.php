@@ -11,6 +11,9 @@
  *   SCANNER_ALLOWED_ORIGINS  only if the scanner page is on a different domain,
  *                       comma separated, e.g. https://scanner.yoursalon.co.uk
  *   SCANNER_TIMEZONE    the salon's timezone (default Europe/London)
+ *   SCANNER_STAFF_SQL   query that lists the stylists for the phone's "C number" buttons.
+ *                       It must return the columns `code` and `name`, e.g. to use your own
+ *                       staff table: SELECT staff_code AS code, first_name AS name FROM staff WHERE active = 1
  */
 declare(strict_types=1);
 
@@ -24,5 +27,6 @@ return [
     'photo_dir'       => $env('SCANNER_PHOTO_DIR', dirname(__DIR__) . '/storage/ticket-photos'),
     'allowed_origins' => array_values(array_filter(array_map('trim', explode(',', $env('SCANNER_ALLOWED_ORIGINS'))))),
     'timezone'        => $env('SCANNER_TIMEZONE', 'Europe/London'),
+    'staff_query'     => $env('SCANNER_STAFF_SQL', 'SELECT code, name FROM scanner_staff WHERE active = 1 ORDER BY name'),
     'max_body_bytes'  => 12 * 1024 * 1024,
 ];

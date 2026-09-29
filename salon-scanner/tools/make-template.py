@@ -67,7 +67,7 @@ SERVICES = [
 
 # Handwritten boxes (inside of the black frames), in template pixels.
 FIELDS = [
-    ("c", "C", [618, 185, 512, 81]),
+    ("staff", "Stylist (C number)", [618, 185, 512, 81]),
     ("treatments", "How many treatments", [25, 1116, 232, 120]),
     ("tips", "Tips", [265, 1116, 232, 120]),
 ]

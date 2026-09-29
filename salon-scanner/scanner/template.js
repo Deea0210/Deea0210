@@ -502,8 +502,8 @@ window.TICKET_TEMPLATE = {
   ],
   "fields": [
     {
-      "key": "c",
-      "label": "C",
+      "key": "staff",
+      "label": "Stylist (C number)",
       "rect": [
         618,
         185,
