@@ -64,6 +64,14 @@ The camera only works on **HTTPS** pages, which your salon software already uses
 6. Check it: `curl -H "Authorization: Bearer YOUR_KEY" "https://your-salon-software/scanner-api/tickets.php?ping=1"`
    should answer `{"ok":true,...}`, and `...tickets.php?staff=1` should list your stylists.
 
+## Try it before your server is ready
+
+The phone app is just files, so GitHub can host it for free on https: in the GitHub repo open
+**Settings → Pages**, set **Source: Deploy from a branch**, pick the branch and **/ (root)**, and **Save**.
+After a minute it opens at `https://deea0210.github.io/Deea0210/salon-scanner/scanner/`.
+On the phone tap **Just try scanning (nothing is sent)** to test the camera and tick reading on real tickets.
+(To send from that copy later, add `https://deea0210.github.io` to `SCANNER_ALLOWED_ORIGINS` on your server.)
+
 ## Set up the phone (once)
 
 1. Open `https://your-salon-software/scanner/` in the phone's browser (Huawei Browser works; so do Firefox and Chrome).

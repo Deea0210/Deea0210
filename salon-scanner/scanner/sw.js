@@ -1,6 +1,6 @@
 /* Caches the app so it opens instantly and works with a weak connection.
    Tickets waiting to be sent are kept in IndexedDB by app.js, not here. */
-const CACHE = 'ticket-scanner-v2';
+const CACHE = 'ticket-scanner-v3';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'recognizer.js', 'template.js', 'config.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (event) => {

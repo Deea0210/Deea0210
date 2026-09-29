@@ -14,7 +14,8 @@
     // ------------------------------------------------------------ settings
 
     const SETTINGS_KEY = 'ticketScanner.settings';
-    const defaults = { apiUrl: CFG.apiUrl || '', apiKey: '', device: CFG.deviceName || 'Reception phone' };
+    const absolute = (url) => { try { return url ? new URL(url, location.href).href : ''; } catch (e) { return url; } };
+    const defaults = { apiUrl: absolute(CFG.apiUrl), apiKey: '', device: CFG.deviceName || 'Reception phone' };
     function loadSettings() {
         try {
             return Object.assign({}, defaults, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
@@ -644,8 +645,10 @@
 
     $('send-btn').addEventListener('click', async () => {
         if (!isConfigured()) {
-            toast('Add the salon software address and key in Settings first');
-            openSettings();
+            // Trying it out before the salon software is connected: nothing to send to.
+            toast('Test only, nothing was sent. Add your salon software in Settings to send tickets.', 4500);
+            scan = null;
+            show('camera');
             return;
         }
         const typedStaff = String(scan.fields.staff || '').trim();
@@ -682,6 +685,7 @@
         form.apiKey.value = settings.apiKey;
         form.device.value = settings.device;
         $('settings-status').hidden = true;
+        $('try-btn').hidden = isConfigured();
         show('settings');
     }
 
@@ -700,7 +704,8 @@
         if (error === 'key') openSettings();
         else toast(error ? 'Still offline. Will retry automatically.' : 'All sent ✓');
     });
-    $('settings-back').addEventListener('click', () => (isConfigured() ? show('camera') : toast('Please fill in the address and key')));
+    $('settings-back').addEventListener('click', () => show('camera'));
+    $('try-btn').addEventListener('click', () => show('camera'));
 
     $('settings-form').addEventListener('submit', (event) => {
         event.preventDefault();
