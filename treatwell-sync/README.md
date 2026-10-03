@@ -69,7 +69,11 @@ this way. To update later: replace the folder's contents and click the ↻ butto
   **!** means Connect is logged out or the salon software couldn't be reached.
 - **Open as a page** (arrow icon) for a full-window list on a reception screen. It updates by itself.
 - **Copy list** or **Download CSV** (opens in Excel): exactly what's on screen (tab and stylist).
-- **Settings** (gear icon): how often to refresh (default 5 minutes) and the salon software connection.
+- **Settings** (gear icon): how often to refresh (default 5 minutes), the salon software connection, and
+  **Leave out bookings for these staff**: type names (or click them under *Staff in Treatwell*) and their bookings
+  are no longer kept, listed, counted or sent to the salon software. Capitals, spaces and dots don't matter
+  ("s tsegi" = "S.Tsegi"); a name that matches nobody in Treatwell gets a "did you mean" hint. Take a name off the
+  list and their bookings come back at the next refresh (straight away when you click Save).
 
 ## Send the bookings to the salon software (optional)
 

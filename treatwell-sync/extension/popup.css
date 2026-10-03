@@ -50,6 +50,8 @@ h1 { margin: 0; font-size: 1.15rem; }
 .chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 0.84rem; }
 .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 
+.left-out { margin: 0 16px 6px; color: var(--muted); font-size: 0.8rem; }
+.left-out button { border: 0; background: none; padding: 0; color: var(--accent); font-size: inherit; text-decoration: underline; }
 .bookings { list-style: none; margin: 0; padding: 0 16px; max-height: 360px; overflow-y: auto; }
 body.page .bookings { max-height: none; }
 .bookings:empty::before { content: attr(data-empty); display: block; padding: 18px 4px; color: var(--muted); }
@@ -78,6 +80,6 @@ body.page .bookings { max-height: none; }
 .link { margin-left: auto; border: 0; background: none; padding: 4px 0; color: var(--muted); font-size: 0.8rem; text-decoration: underline; }
 
 @media print {
-    .head__actions, .foot, .filters, .views, .status { display: none !important; }
+    .head__actions, .foot, .filters, .views, .status, .left-out { display: none !important; }
     body.page { padding: 0; }
 }

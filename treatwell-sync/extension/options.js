@@ -8,12 +8,54 @@
         status.hidden = !text;
     };
 
+    // Same rule as background.js: "S.Tsegi", "s tsegi" and "STSEGI" are the same person.
+    const staffKey = (name) => String(name || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const typedStaff = () => {
+        const names = form.excludeStaff.value.split(/[\n,;]+/).map(n => n.trim()).filter(Boolean);
+        return names.filter((n, i) => names.findIndex(m => staffKey(m) === staffKey(n)) === i);
+    };
+    let seenStaff = []; // staff names seen in Treatwell bookings
+
     const read = () => ({
         refreshMinutes: Number(form.refreshMinutes.value) || 5,
         apiUrl: form.apiUrl.value.trim(),
         apiKey: form.apiKey.value.trim(),
         device: form.device.value.trim() || 'Reception PC',
+        excludeStaff: typedStaff(),
     });
+
+    /** Clickable names seen in Treatwell, and a hint for typed names that match nobody. */
+    function renderStaff() {
+        const left = new Set(typedStaff().map(staffKey));
+        const box = document.getElementById('staff-seen');
+        box.hidden = !seenStaff.length;
+        box.replaceChildren(Object.assign(document.createElement('span'), { className: 'note', textContent: 'Staff in Treatwell:' }),
+            ...seenStaff.map(name => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'chip';
+                chip.textContent = name;
+                chip.setAttribute('aria-pressed', String(left.has(staffKey(name))));
+                chip.title = left.has(staffKey(name)) ? 'Click to include again' : 'Click to leave out';
+                chip.addEventListener('click', () => {
+                    const names = typedStaff();
+                    form.excludeStaff.value = (left.has(staffKey(name))
+                        ? names.filter(n => staffKey(n) !== staffKey(name))
+                        : names.concat(name)).join('\n');
+                    renderStaff();
+                });
+                return chip;
+            }));
+        const check = document.getElementById('staff-check');
+        const known = new Set(seenStaff.map(staffKey));
+        const unknown = seenStaff.length ? typedStaff().filter(n => staffKey(n) && !known.has(staffKey(n))) : [];
+        check.hidden = !unknown.length;
+        check.textContent = unknown.map(n => {
+            const close = seenStaff.find(s => staffKey(s).includes(staffKey(n)) || staffKey(n).includes(staffKey(s)));
+            return `"${n}" isn't a staff name in Treatwell${close ? `. Did you mean ${close}?` : '. Check the spelling.'}`;
+        }).join(' ');
+    }
+    form.excludeStaff.addEventListener('input', renderStaff);
 
     /** Chrome only lets the extension talk to the salon software's address once it's allowed here. */
     function askAccess(apiUrl) {
@@ -27,12 +69,15 @@
         return chrome.permissions.request({ origins: [origin] }).catch(() => false);
     }
 
-    chrome.storage.local.get('settings').then(({ settings }) => {
-        const s = Object.assign({ refreshMinutes: 5, apiUrl: '', apiKey: '', device: 'Reception PC' }, settings || {});
+    chrome.storage.local.get(['settings', 'state']).then(({ settings, state }) => {
+        const s = Object.assign({ refreshMinutes: 5, apiUrl: '', apiKey: '', device: 'Reception PC', excludeStaff: [] }, settings || {});
         form.refreshMinutes.value = String(s.refreshMinutes);
         form.apiUrl.value = s.apiUrl;
         form.apiKey.value = s.apiKey;
         form.device.value = s.device;
+        form.excludeStaff.value = s.excludeStaff.join('\n');
+        seenStaff = Object.keys((state && state.staffSeen) || {}).sort((a, b) => a.localeCompare(b));
+        renderStaff();
     });
 
     form.addEventListener('submit', async (event) => {

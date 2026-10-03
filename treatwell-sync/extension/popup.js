@@ -146,6 +146,16 @@
             return chip;
         }));
 
+        const excluded = settings.excludeStaff || [];
+        const leftOutEl = $('left-out');
+        leftOutEl.hidden = !excluded.length;
+        if (excluded.length) {
+            const change = el('button', '', 'Change');
+            change.type = 'button';
+            change.addEventListener('click', () => chrome.runtime.openOptionsPage());
+            leftOutEl.replaceChildren(`Leaving out bookings for ${excluded.join(', ')} · `, change);
+        }
+
         const listEl = $('bookings');
         listEl.dataset.empty = !(state.connect && state.connect.seenAt) ? 'No bookings read yet.'
             : view === 'upcoming' ? 'Nothing more today.' : view === 'missed' ? 'No no-shows today.' : 'No bookings for today.';

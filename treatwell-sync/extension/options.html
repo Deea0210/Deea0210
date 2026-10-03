@@ -17,6 +17,11 @@
         .btn--primary:hover { background: #115e59; }
         .status { margin: 0; }
         .note { color: var(--muted); font-size: 0.86rem; }
+        textarea { padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; font: inherit; resize: vertical; }
+        .seen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -6px; }
+        .seen .note { margin-right: 2px; }
+        .chip[aria-pressed="true"] { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+        .warn { margin: -6px 0 0; color: var(--warn); font-size: 0.86rem; }
     </style>
 </head>
 <body>
@@ -33,6 +38,13 @@
                 <option value="15">15 minutes</option>
             </select>
         </label>
+        <label>Leave out bookings for these staff
+            <small>One name per line, or separated by commas. Their bookings aren't listed, counted or sent to the salon
+                software. Capitals, spaces and dots don't matter.</small>
+            <textarea name="excludeStaff" rows="3" placeholder="e.g. B.Axu"></textarea>
+        </label>
+        <div class="seen" id="staff-seen" hidden></div>
+        <p class="warn" id="staff-check" hidden></p>
         <label>Salon software address <small>The bookings receiver, e.g. https://your-salon-software/treatwell-api/bookings.php (leave empty to only show the list)</small>
             <input name="apiUrl" type="url" placeholder="https://…/treatwell-api/bookings.php">
         </label>

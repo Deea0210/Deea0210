@@ -5,8 +5,13 @@
 importScripts('extract.js');
 
 const CONNECT_TABS = ['https://connect.treatwell.co.uk/*'];
-const DEFAULTS = { apiUrl: '', apiKey: '', refreshMinutes: 5, device: 'Reception PC' };
+const DEFAULTS = { apiUrl: '', apiKey: '', refreshMinutes: 5, device: 'Reception PC', excludeStaff: [] };
 const KEEP_DAYS = 7;
+
+// Staff whose bookings are left out (Settings). "S.Tsegi", "s tsegi" and "STSEGI" are the same person.
+const staffKey = (name) => String(name || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+const leftOut = (settings) => new Set((settings.excludeStaff || []).map(staffKey).filter(Boolean));
+const isLeftOut = (booking, excluded) => Boolean(booking.staff) && excluded.has(staffKey(booking.staff));
 
 const today = () => self.TwExtract.localDate(new Date());
 
@@ -26,10 +31,18 @@ const serial = (job) => (queue = queue.then(job, job));
 
 // ------------------------------------------------------------ bookings from the Connect tab
 
-function storeBookings(state, msg) {
+function storeBookings(state, msg, excluded) {
+    // Every staff name seen, so Settings can offer them (names only, kept 60 days).
+    const seen = state.staffSeen || {};
+    for (const b of msg.bookings || []) if (b.staff && !(seen[b.staff] >= b.date)) seen[b.staff] = b.date;
+    const longAgo = new Date();
+    longAgo.setDate(longAgo.getDate() - 60);
+    for (const name of Object.keys(seen)) if (seen[name] < self.TwExtract.localDate(longAgo)) delete seen[name];
+    state.staffSeen = seen;
+
     const complete = new Set(msg.complete || []);
     const byDay = {};
-    for (const b of msg.bookings || []) (byDay[b.date] = byDay[b.date] || []).push(b);
+    for (const b of msg.bookings || []) if (!isLeftOut(b, excluded)) (byDay[b.date] = byDay[b.date] || []).push(b);
     for (const day of new Set([...complete, ...Object.keys(byDay)])) {
         const entry = state.days[day] || { bookings: {}, complete: false };
         const fresh = byDay[day] || [];
@@ -53,7 +66,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (msg.type === 'bookings' && sender.tab) {
         serial(async () => {
             const state = await getState();
-            storeBookings(state, msg);
+            storeBookings(state, msg, leftOut(await getSettings()));
             state.connect = { seenAt: msg.at, hasSource: msg.hasSource };
             await chrome.storage.local.set({ state });
             await sendToSalon();
@@ -70,7 +83,22 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return true;
     }
     if (msg.type === 'settings-changed') {
-        setupAlarm().then(() => serial(() => sendToSalon(true))).then(updateBadge).then(() => reply({ ok: true }));
+        setupAlarm()
+            .then(() => serial(async () => {
+                // Drop the bookings of staff just left out; a refresh brings back anyone taken off the list.
+                const excluded = leftOut(await getSettings());
+                const state = await getState();
+                for (const day of Object.values(state.days)) {
+                    for (const [id, b] of Object.entries(day.bookings)) if (isLeftOut(b, excluded)) delete day.bookings[id];
+                }
+                await chrome.storage.local.set({ state });
+                await sendToSalon(true);
+            }))
+            .then(updateBadge)
+            .then(() => {
+                reply({ ok: true });
+                refreshNow();
+            });
         return true;
     }
     return false;

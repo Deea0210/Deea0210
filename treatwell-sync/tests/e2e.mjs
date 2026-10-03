@@ -160,6 +160,41 @@ const csv = readFileSync(await csvFile.path(), 'utf8');
 check('CSV has the happening bookings only', csv.split('\r\n').length === 5 && !/Nora West|John Smith/.test(csv) && csv.includes('Unconfirmed'),
     csv.split('\r\n').map(l => l.slice(0, 60)));
 
+// 5b) Leave out a stylist's bookings
+const settingsPage = await context.newPage();
+settingsPage.on('pageerror', e => errors.push('options: ' + e.message));
+await settingsPage.goto(`chrome-extension://${extId}/options.html`);
+await settingsPage.waitForSelector('#staff-seen .chip');
+const offered = await settingsPage.$$eval('#staff-seen .chip', els => els.map(e => e.textContent));
+check('Settings offers the staff names seen in Treatwell', ['Mohammad A', 'S.Renato', 'Sofia', 'Zane'].every(n => offered.includes(n)), offered);
+await settingsPage.click('#staff-seen .chip:has-text("Zane")');
+check('clicking a name adds it to the box', (await settingsPage.inputValue('textarea[name=excludeStaff]')) === 'Zane');
+await settingsPage.fill('textarea[name=excludeStaff]', 'zane\nrenato');
+await settingsPage.dispatchEvent('textarea[name=excludeStaff]', 'input');
+check('a name that matches nobody gets a hint', /"renato" isn't a staff name in Treatwell\. Did you mean S\.Renato\?/.test(await settingsPage.textContent('#staff-check')),
+    await settingsPage.textContent('#staff-check'));
+await settingsPage.fill('textarea[name=excludeStaff]', 'zane');
+await settingsPage.click('button[type=submit]');
+await settingsPage.waitForFunction(() => /Saved/.test(document.getElementById('status').textContent));
+await shot(settingsPage, '5-settings-staff.png');
+await sleep(2000);
+rows = await rowsOf(popup);
+check('their bookings are left out of the list', rows.length === 2 && !rows.some(r => r.includes('Valentina')), rows);
+check('the popup says who is left out', /Leaving out bookings for zane/.test(await popup.textContent('#left-out')), await popup.textContent('#left-out'));
+check('and out of the badge count', (await worker.evaluate(() => chrome.action.getBadgeText({}))) === '2');
+stored = db(`SELECT treatwell_id, removed FROM treatwell_bookings WHERE treatwell_id IN (507, 508) ORDER BY treatwell_id`);
+check('and out of the salon software (marked removed)', stored === '507\t1\n508\t1', stored);
+await shot(popup, '6-staff-left-out.png');
+await settingsPage.fill('textarea[name=excludeStaff]', '');
+await settingsPage.click('button[type=submit]');
+await settingsPage.waitForFunction(() => /Saved/.test(document.getElementById('status').textContent));
+await settingsPage.close();
+await sleep(2500);
+rows = await rowsOf(popup);
+check('emptying the box brings them back', rows.filter(r => r.includes('Valentina')).length === 2, rows);
+stored = db(`SELECT treatwell_id, removed FROM treatwell_bookings WHERE treatwell_id IN (507, 508) ORDER BY treatwell_id`);
+check('also in the salon software', stored === '507\t0\n508\t0', stored);
+
 // 6) Logged out of Connect
 await ctl('/logout');
 await popup.click('#refresh');
