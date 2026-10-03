@@ -1,5 +1,6 @@
 (() => {
     'use strict';
+    const api = globalThis.browser || globalThis.chrome; // Firefox: browser.*, Chrome: chrome.*
     const form = document.getElementById('form');
     const status = document.getElementById('status');
     const say = (text, tone) => {
@@ -57,19 +58,20 @@
     }
     form.excludeStaff.addEventListener('input', renderStaff);
 
-    /** Chrome only lets the extension talk to the salon software's address once it's allowed here. */
+    /** The browser only lets the extension talk to the salon software's address once it's allowed here. */
     function askAccess(apiUrl) {
         if (!apiUrl) return Promise.resolve(true);
         let origin;
         try {
-            origin = new URL(apiUrl).origin + '/*';
+            const u = new URL(apiUrl);
+            origin = `${u.protocol}//${u.hostname}/*`; // no port: Firefox treats "host:port" as a separate site
         } catch (e) {
             return Promise.resolve(false);
         }
-        return chrome.permissions.request({ origins: [origin] }).catch(() => false);
+        return api.permissions.request({ origins: [origin] }).catch(() => false);
     }
 
-    chrome.storage.local.get(['settings', 'state']).then(({ settings, state }) => {
+    api.storage.local.get(['settings', 'state']).then(({ settings, state }) => {
         const s = Object.assign({ refreshMinutes: 5, apiUrl: '', apiKey: '', device: 'Reception PC', excludeStaff: [] }, settings || {});
         form.refreshMinutes.value = String(s.refreshMinutes);
         form.apiUrl.value = s.apiUrl;
@@ -85,9 +87,9 @@
         const s = read();
         const access = askAccess(s.apiUrl); // must start straight from the click
         if (s.apiUrl && !s.apiKey) return say('Add the key too, or leave the address empty.', 'warn');
-        if (!(await access)) return say('Chrome needs your OK to reach the salon software. Click Save again and choose Allow.', 'warn');
-        await chrome.storage.local.set({ settings: s });
-        await chrome.runtime.sendMessage({ type: 'settings-changed' });
+        if (!(await access)) return say('The browser needs your OK to reach the salon software. Click Save again and choose Allow.', 'warn');
+        await api.storage.local.set({ settings: s });
+        await api.runtime.sendMessage({ type: 'settings-changed' });
         say('Saved ✓', 'ok');
     });
 
@@ -95,7 +97,7 @@
         const s = read();
         const access = askAccess(s.apiUrl);
         if (!s.apiUrl || !s.apiKey) return say('Fill in the address and key first.', 'warn');
-        if (!(await access)) return say('Chrome needs your OK to reach the salon software. Try again and choose Allow.', 'warn');
+        if (!(await access)) return say('The browser needs your OK to reach the salon software. Try again and choose Allow.', 'warn');
         say('Testing…');
         try {
             const url = s.apiUrl + (s.apiUrl.includes('?') ? '&' : '?') + 'ping=1';

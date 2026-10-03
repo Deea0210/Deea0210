@@ -2,8 +2,12 @@
 (() => {
     'use strict';
     const $ = (id) => document.getElementById(id);
-    const asPage = new URLSearchParams(location.search).has('page');
+    const api = globalThis.browser || globalThis.chrome; // Firefox: browser.*, Chrome: chrome.*
+    const params = new URLSearchParams(location.search);
+    const asPage = params.has('page');
     if (asPage) document.body.classList.add('page');
+    // Firefox can lose a file saved straight from the toolbar popup, so there it's saved from the full-page list.
+    const saveFromTab = !asPage && typeof globalThis.browser !== 'undefined' && /Firefox\//.test(navigator.userAgent);
 
     const pad = (n) => String(n).padStart(2, '0');
     const todayKey = () => {
@@ -25,7 +29,7 @@
         { key: 'missed', label: 'No-shows', test: (b) => !happening(b), hideWhenEmpty: true },
     ];
 
-    let state = null, settings = {}, staffFilter = '';
+    let state = null, settings = {}, staffFilter = params.get('staff') || '';
     let view = 'happening';
     try { view = localStorage.getItem('view') || view; } catch (e) { /* default view */ }
 
@@ -60,7 +64,7 @@
         const minutes = Number(settings.refreshMinutes) || 5;
         let text, tone;
         if (refresh.reason === 'no-tab') {
-            text = 'Open Treatwell Connect in Chrome and log in. The list fills in from its calendar.';
+            text = 'Open Treatwell Connect in this browser and log in. The list fills in from its calendar.';
             tone = 'warn';
         } else if (refresh.reason === 'logged-out') {
             text = 'Treatwell Connect is logged out. Log in again in its tab.';
@@ -152,7 +156,7 @@
         if (excluded.length) {
             const change = el('button', '', 'Change');
             change.type = 'button';
-            change.addEventListener('click', () => chrome.runtime.openOptionsPage());
+            change.addEventListener('click', () => api.runtime.openOptionsPage());
             leftOutEl.replaceChildren(`Leaving out bookings for ${excluded.join(', ')} · `, change);
         }
 
@@ -173,13 +177,13 @@
     }
 
     async function load() {
-        const data = await chrome.storage.local.get(['state', 'settings']);
+        const data = await api.storage.local.get(['state', 'settings']);
         state = Object.assign({ days: {}, connect: {}, refresh: {}, send: {} }, data.state || {});
         settings = Object.assign({ refreshMinutes: 5 }, data.settings || {});
         render();
     }
 
-    chrome.storage.onChanged.addListener((changes, area) => {
+    api.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && (changes.state || changes.settings)) load();
     });
 
@@ -188,19 +192,22 @@
         btn.classList.add('is-busy');
         btn.disabled = true;
         try {
-            await chrome.runtime.sendMessage({ type: 'refresh' });
+            await api.runtime.sendMessage({ type: 'refresh' });
         } finally {
             btn.classList.remove('is-busy');
             btn.disabled = false;
-            load();
+            load().then(() => {
+        const save = params.get('save');
+        if (asPage && (save === 'csv' || save === 'sample')) $(save).click();
+    });
         }
     });
 
     $('open-tab').addEventListener('click', () => {
-        chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?page=1') });
+        api.tabs.create({ url: api.runtime.getURL('popup.html?page=1') });
         if (!asPage) window.close();
     });
-    $('settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
+    $('settings').addEventListener('click', () => api.runtime.openOptionsPage());
 
     function download(name, type, content) {
         const url = URL.createObjectURL(new Blob([content], { type }));
@@ -228,7 +235,16 @@
         setTimeout(() => { $('copy').textContent = 'Copy list'; }, 1500);
     });
 
+    /** In the Firefox popup: open the full-page list, which saves the file (same tab and stylist). */
+    function saveInTab(what) {
+        const q = new URLSearchParams({ page: '1', save: what });
+        if (staffFilter) q.set('staff', staffFilter);
+        api.tabs.create({ url: api.runtime.getURL('popup.html?' + q) });
+        window.close();
+    }
+
     $('csv').addEventListener('click', () => {
+        if (saveFromTab) return saveInTab('csv');
         const cell = (v) => {
             const s = v === null || v === undefined ? '' : String(v);
             const safe = /^[=+\-@]/.test(s) ? "'" + s : s; // stops spreadsheets running it as a formula
@@ -242,7 +258,8 @@
     });
 
     $('sample').addEventListener('click', async () => {
-        const answer = await chrome.runtime.sendMessage({ type: 'sample' });
+        if (saveFromTab) return saveInTab('sample');
+        const answer = await api.runtime.sendMessage({ type: 'sample' });
         if (answer && answer.answers) {
             download(`treatwell-setup-${todayKey()}.json`, 'application/json', JSON.stringify(answer, null, 2));
             setStatus($('status'), 'Setup file saved to Downloads. It has no client names or phone numbers. Send it to your developer.', 'ok');
@@ -251,6 +268,9 @@
         }
     });
 
-    load();
+    load().then(() => {
+        const save = params.get('save');
+        if (asPage && (save === 'csv' || save === 'sample')) $(save).click();
+    });
     setInterval(render, 60000); // "Still to come" and the date move on by themselves
 })();

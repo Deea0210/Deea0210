@@ -5,6 +5,7 @@
 (() => {
     'use strict';
     const X = window.TwExtract;
+    const api = globalThis.browser || globalThis.chrome; // Firefox: browser.*, Chrome: chrome.*
     const CHANNEL = 'tw-bookings-sync';
     const MAX_CAPTURES = 60;
     // Answers from these pages are never treated as bookings (reviews, reports, …).
@@ -34,7 +35,11 @@
     window.addEventListener('message', (event) => {
         if (event.source !== window || !event.data || event.data[CHANNEL] !== 'capture') return;
         try {
-            onCapture(event.data);
+            const d = event.data; // copied field by field: Firefox gives content scripts a wrapped page object
+            onCapture({
+                url: d.url, method: d.method, status: d.status, body: d.body, error: d.error, replayId: d.replayId,
+                replayable: d.replayable, requestBody: d.requestBody, headers: Object.assign({}, d.headers || {}),
+            });
         } catch (e) {
             console.warn('[Treatwell Bookings] could not read an answer:', e);
         }
@@ -100,9 +105,9 @@
     }
 
     function send() {
-        if (!chrome.runtime || !chrome.runtime.id) return; // extension was reloaded: this tab needs a reload too
+        if (!api.runtime || !api.runtime.id) return; // extension was reloaded: this tab needs a reload too
         const snap = snapshot();
-        chrome.runtime.sendMessage({
+        api.runtime.sendMessage({
             type: 'bookings', bookings: snap.bookings, complete: snap.complete, at: Date.now(), hasSource: Boolean(source),
         }).catch(() => {});
     }
@@ -133,7 +138,7 @@
         const snap = snapshot();
         return {
             createdAt: new Date().toISOString(),
-            extension: chrome.runtime.getManifest().version,
+            extension: api.runtime.getManifest().version,
             page: location.origin + location.pathname,
             bookingsSource: source ? { method: source.method, url: X.redactUrl(source.url), headerNames: Object.keys(source.headers) } : null,
             bookingsFound: snap.bookings.length,
@@ -147,7 +152,7 @@
         };
     }
 
-    chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+    api.runtime.onMessage.addListener((msg, sender, reply) => {
         if (msg.type === 'refresh') {
             refresh(msg.day).then(reply);
             return true;

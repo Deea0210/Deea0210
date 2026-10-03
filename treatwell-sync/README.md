@@ -1,11 +1,12 @@
 # Salon Bookings Sync (Treatwell Connect)
 
-A Chrome extension for the reception computer. While **Treatwell Connect** is open and logged in, it reads
+A browser extension for the reception computer, for **Chrome** (also Edge, Brave, Opera) and **Firefox**. While
+**Treatwell Connect** is open and logged in, it reads
 **today's bookings** from the Connect calendar, keeps them up to date on its own, and can send them to the salon
 software.
 
 ```
- Chrome on the reception PC                                         your AWS server
+ Browser on the reception PC                                        your AWS server
 ┌───────────────────────────────────────────────┐   HTTPS POST    ┌───────────────────────────────┐
 │ Treatwell Connect tab (logged in as usual)    │   (JSON, key)   │ receiver/api/bookings.php     │
 │   └ the calendar loads its bookings  ──┐      │ ──────────────▶ │  → MySQL: treatwell_bookings  │
@@ -18,7 +19,7 @@ software.
 ## How it reads the bookings
 
 Treatwell doesn't give individual salons an API, so the extension uses what the Connect calendar itself loads
-from Treatwell's servers in your logged-in Chrome:
+from Treatwell's servers in your logged-in browser:
 
 - It **listens** to the data the calendar page receives and picks out the bookings: time, client, phone,
   service, stylist, price, status and notes. Stylist and service names are matched from the other lists the page
@@ -42,18 +43,52 @@ the salon systems Treatwell integrates with (Connect → Settings → Online Boo
 
 ## Install (once, on the reception computer)
 
-1. Download **[salon-bookings-sync.zip](salon-bookings-sync.zip)**, right-click it → **Extract All…** and extract
-   it to a folder that will stay and is **not in OneDrive**, e.g. `C:\SalonBookingsSync` (Chrome loads it from there
-   every time; OneDrive can turn files into online-only copies Chrome can't read).
-2. In Chrome, open `chrome://extensions`, switch on **Developer mode** (top right) and click **Load unpacked**.
+There are two versions of the same extension, made from the same code:
+**[salon-bookings-sync-chrome.zip](salon-bookings-sync-chrome.zip)** and
+**[salon-bookings-sync-firefox.zip](salon-bookings-sync-firefox.zip)**.
+
+### Chrome, Edge, Brave or Opera (Windows or Mac)
+
+1. Download **salon-bookings-sync-chrome.zip** and unzip it (Windows: right-click → **Extract All…**; Mac:
+   double-click) into a folder that will stay and is **not in OneDrive or iCloud Drive**, e.g. `C:\SalonBookingsSync`
+   or your Mac's home folder. The browser loads it from there every time, and synced folders can turn files into
+   online-only copies it can't read.
+2. Open `chrome://extensions` (Edge: `edge://extensions`), switch on **Developer mode** and click **Load unpacked**.
    Choose the folder that has `manifest.json` directly inside it.
-3. Click the puzzle icon in Chrome's toolbar and **pin** *Salon Bookings Sync*.
+3. Click the puzzle icon in the toolbar and **pin** *Salon Bookings Sync*.
 4. **Reload the Treatwell Connect tab** (F5) and open its **Calendar** once.
-5. Recommended: Chrome **Settings → Performance → Memory saver → Always keep these sites active → Add**
+5. Recommended in Chrome: **Settings → Performance → Memory saver → Always keep these sites active → Add**
    `connect.treatwell.co.uk`, so Chrome never puts the Connect tab to sleep.
 
 Chrome may show a notice about developer-mode extensions when it starts; that's normal for extensions installed
-this way. To update later: replace the folder's contents and click the ↻ button on the extension in `chrome://extensions`.
+this way. To update later: replace the folder's contents and click ↻ on the extension in `chrome://extensions`.
+
+### Firefox 140 or newer (Windows or Mac)
+
+Firefox only keeps add-ons that Mozilla has signed. Signing your own add-on is free, private and takes minutes:
+
+1. Download **salon-bookings-sync-firefox.zip** (leave it zipped).
+2. Go to **https://addons.mozilla.org/developers/** and log in (or create a free Mozilla account).
+3. Click **Submit a New Add-on**, choose **On your own** (it stays private: not listed on Mozilla's site), and
+   upload the zip. Mozilla's automatic check should pass (it was run on this zip: 0 errors, 0 warnings). If asked
+   whether you need to submit source code, answer **No**: the code is plain, readable JavaScript.
+4. When it's signed (usually within minutes; Mozilla emails you), download the **.xpi** file from the add-on's
+   page in the Developer Hub.
+5. Open the `.xpi` in Firefox (drag it onto a Firefox window) and click **Add**. Firefox lists what the add-on can
+   do, including that it can send booking details (clients' names, phones, emails) to your salon software; that's
+   the optional sending below and only happens if you set it up.
+6. Click the puzzle icon → gear next to *Salon Bookings Sync* → **Pin to Toolbar**, then reload the Treatwell
+   Connect tab and open its **Calendar** once.
+
+Just want to try it first? `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → choose the zip.
+It stays until Firefox is closed.
+
+To update: in the Developer Hub open *Salon Bookings Sync* → **Upload New Version**, upload the new zip, then open
+the new `.xpi`. Your settings are kept. If the list stays empty in Firefox: `about:addons` → *Salon Bookings Sync* →
+**Permissions** → make sure access to `connect.treatwell.co.uk` is on.
+
+In Firefox, **Download CSV** and **Save a setup file** open the full-page list in a tab and save from there
+(Firefox can lose files saved straight from the toolbar popup).
 
 ## Using it
 
@@ -103,7 +138,8 @@ Today's list is sent whenever it changes (and retried if the server can't be rea
   "bookings": [
     { "id": "501", "date": "2026-10-03", "start": "10:30", "end": "11:15", "customer": "John Smith",
       "phone": "07700 900123", "email": "", "service": "Skin Fade", "staff": "Renato", "price": 15.75,
-      "status": "CONFIRMED", "cancelled": false, "noShow": false, "notes": "", "channel": "" }
+      "status": "Confirmed", "statusCode": "CN", "cancelled": false, "noShow": false, "completed": false,
+      "notes": "", "channel": "SUPPLIER" }
   ]
 }
 ```
@@ -123,20 +159,24 @@ ORDER BY start_time;
 
 ## Privacy
 
-Client details stay on the reception computer (Chrome's extension storage, last 7 days only) and, if set up,
+Client details stay on the reception computer (the browser's extension storage, last 7 days only) and, if set up,
 your own salon database. Nothing is sent anywhere else.
 
 ## Files
 
 ```
-extension/          the Chrome extension (no build step)
+extension/          the extension's code, shared by both versions (manifest.json here is the Chrome one)
   page-hook.js      inside the Connect page: passes on the data the calendar loads, repeats its read request
   extract.js        finds the bookings in that data, whatever its layout
   content.js        collects them for the open Connect tab
   background.js     keeps today's list, refreshes it, sends it to the salon software
   popup.*           the list;  options.*  settings
+tools/build.py      makes salon-bookings-sync-chrome.zip and salon-bookings-sync-firefox.zip from extension/
 receiver/           PHP endpoint + MySQL table for the salon software
-tests/              extract.test.mjs (layouts), e2e.mjs + mock-connect/ (pretend Connect site)
+tests/              extract.test.mjs (layouts), e2e.mjs (Chrome) and firefox-e2e.mjs (Firefox)
+                    + mock-connect/ (pretend Connect site with the real data layout)
 ```
 
-Tests: `node tests/extract.test.mjs`, and for the full run see the top of `tests/e2e.mjs`.
+After changing anything in `extension/`, run `python3 tools/build.py` and bump `version` in
+`extension/manifest.json` (Firefox needs a higher version for each signed update).
+Tests: `node tests/extract.test.mjs`; for the full runs see the top of `tests/e2e.mjs` and `tests/firefox-e2e.mjs`.

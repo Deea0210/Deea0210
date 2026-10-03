@@ -2,7 +2,9 @@
  * Keeps today's bookings, refreshes them from the open Treatwell Connect tab every few
  * minutes, and (if set up) sends them to the salon software.
  */
-importScripts('extract.js');
+// Chrome runs this as a service worker; Firefox loads extract.js first itself (manifest background.scripts).
+if (typeof importScripts === 'function') importScripts('extract.js');
+const api = globalThis.browser || globalThis.chrome; // Firefox: browser.*, Chrome: chrome.*
 
 const CONNECT_TABS = ['https://connect.treatwell.co.uk/*'];
 const DEFAULTS = { apiUrl: '', apiKey: '', refreshMinutes: 5, device: 'Reception PC', excludeStaff: [] };
@@ -16,12 +18,12 @@ const isLeftOut = (booking, excluded) => Boolean(booking.staff) && excluded.has(
 const today = () => self.TwExtract.localDate(new Date());
 
 async function getSettings() {
-    const { settings } = await chrome.storage.local.get('settings');
+    const { settings } = await api.storage.local.get('settings');
     return Object.assign({}, DEFAULTS, settings || {});
 }
 
 async function getState() {
-    const { state } = await chrome.storage.local.get('state');
+    const { state } = await api.storage.local.get('state');
     return Object.assign({ days: {}, connect: {}, refresh: {}, send: {} }, state || {});
 }
 
@@ -62,13 +64,13 @@ function storeBookings(state, msg, excluded) {
     for (const day of Object.keys(state.days)) if (day < cutoff) delete state.days[day];
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+api.runtime.onMessage.addListener((msg, sender, reply) => {
     if (msg.type === 'bookings' && sender.tab) {
         serial(async () => {
             const state = await getState();
             storeBookings(state, msg, leftOut(await getSettings()));
             state.connect = { seenAt: msg.at, hasSource: msg.hasSource };
-            await chrome.storage.local.set({ state });
+            await api.storage.local.set({ state });
             await sendToSalon();
             await updateBadge();
         });
@@ -91,7 +93,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
                 for (const day of Object.values(state.days)) {
                     for (const [id, b] of Object.entries(day.bookings)) if (isLeftOut(b, excluded)) delete day.bookings[id];
                 }
-                await chrome.storage.local.set({ state });
+                await api.storage.local.set({ state });
                 await sendToSalon(true);
             }))
             .then(updateBadge)
@@ -107,7 +109,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 // ------------------------------------------------------------ automatic refresh
 
 async function connectTabs() {
-    return chrome.tabs.query({ url: CONNECT_TABS });
+    return api.tabs.query({ url: CONNECT_TABS });
 }
 
 async function askConnectTab(message) {
@@ -118,7 +120,7 @@ async function askConnectTab(message) {
     tabs.sort((a, b) => (b.active - a.active) || ((b.lastAccessed || 0) - (a.lastAccessed || 0)));
     for (const tab of tabs) {
         try {
-            const answer = await chrome.tabs.sendMessage(tab.id, message);
+            const answer = await api.tabs.sendMessage(tab.id, message);
             if (answer && answer.ok !== false) return answer;
             if (answer) last = answer;
         } catch (e) {
@@ -133,7 +135,7 @@ async function refreshNow() {
     await serial(async () => {
         const state = await getState();
         state.refresh = { at: Date.now(), ok: Boolean(result.ok), reason: result.reason || '' };
-        await chrome.storage.local.set({ state });
+        await api.storage.local.set({ state });
         await sendToSalon(); // retries a send that failed earlier
     });
     await updateBadge();
@@ -142,19 +144,19 @@ async function refreshNow() {
 
 async function setupAlarm() {
     const { refreshMinutes } = await getSettings();
-    await chrome.alarms.clear('refresh');
-    await chrome.alarms.create('refresh', { periodInMinutes: Math.max(1, Number(refreshMinutes) || 5), delayInMinutes: 0.1 });
+    await api.alarms.clear('refresh');
+    await api.alarms.create('refresh', { periodInMinutes: Math.max(1, Number(refreshMinutes) || 5), delayInMinutes: 0.1 });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(() => {
     setupAlarm();
     updateBadge();
 });
-chrome.runtime.onStartup.addListener(() => {
+api.runtime.onStartup.addListener(() => {
     setupAlarm();
     updateBadge();
 });
-chrome.alarms.onAlarm.addListener((alarm) => {
+api.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'refresh') refreshNow();
 });
 
@@ -205,7 +207,7 @@ async function sendToSalon(force) {
     }
     const latest = await getState();
     latest.send = Object.assign({ at: Date.now(), hash: result.ok ? hash : state.send.hash }, result);
-    await chrome.storage.local.set({ state: latest });
+    await api.storage.local.set({ state: latest });
 }
 
 // ------------------------------------------------------------ toolbar badge
@@ -214,6 +216,6 @@ async function updateBadge() {
     const state = await getState();
     const live = todaysBookings(state).filter(b => !b.cancelled && !b.noShow); // the bookings happening today
     const problem = (state.refresh.reason === 'logged-out') || (state.send.ok === false && (await getSettings()).apiUrl);
-    await chrome.action.setBadgeText({ text: problem ? '!' : live.length ? String(live.length) : '' });
-    await chrome.action.setBadgeBackgroundColor({ color: problem ? '#b91c1c' : '#0f766e' });
+    await api.action.setBadgeText({ text: problem ? '!' : live.length ? String(live.length) : '' });
+    await api.action.setBadgeBackgroundColor({ color: problem ? '#b91c1c' : '#0f766e' });
 }
