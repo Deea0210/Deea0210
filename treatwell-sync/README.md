@@ -41,10 +41,11 @@ the salon systems Treatwell integrates with (Connect → Settings → Online Boo
 
 ## Install (once, on the reception computer)
 
-1. Download **[salon-bookings-sync.zip](salon-bookings-sync.zip)** and unzip it into a folder that will stay,
-   e.g. `Documents\Salon Bookings Sync` (Chrome loads it from there every time).
+1. Download **[salon-bookings-sync.zip](salon-bookings-sync.zip)**, right-click it → **Extract All…** and extract
+   it to a folder that will stay and is **not in OneDrive**, e.g. `C:\SalonBookingsSync` (Chrome loads it from there
+   every time; OneDrive can turn files into online-only copies Chrome can't read).
 2. In Chrome, open `chrome://extensions`, switch on **Developer mode** (top right) and click **Load unpacked**.
-   Choose the unzipped folder (the one containing `manifest.json`).
+   Choose the folder that has `manifest.json` directly inside it.
 3. Click the puzzle icon in Chrome's toolbar and **pin** *Salon Bookings Sync*.
 4. **Reload the Treatwell Connect tab** (F5) and open its **Calendar** once.
 5. Recommended: Chrome **Settings → Performance → Memory saver → Always keep these sites active → Add**
