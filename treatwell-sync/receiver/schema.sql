@@ -1,5 +1,6 @@
 -- Treatwell bookings, as sent by the Salon Bookings Sync extension (MySQL 5.7+ / MariaDB 10.3+).
--- Today's list:  SELECT * FROM treatwell_bookings WHERE booking_date = CURDATE() AND removed = 0 ORDER BY start_time;
+-- Today's bookings that are happening:
+--   SELECT * FROM treatwell_bookings WHERE booking_date = CURDATE() AND removed = 0 AND cancelled = 0 AND no_show = 0 ORDER BY start_time;
 
 CREATE TABLE IF NOT EXISTS treatwell_bookings (
     id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS treatwell_bookings (
     customer_phone  VARCHAR(40)  NOT NULL DEFAULT '',
     customer_email  VARCHAR(160) NOT NULL DEFAULT '',
     price           DECIMAL(10,2) NULL,
-    status          VARCHAR(40)  NOT NULL DEFAULT '',      -- as Treatwell shows it, e.g. CONFIRMED
+    status          VARCHAR(40)  NOT NULL DEFAULT '',      -- Confirmed, Unconfirmed, Completed, No-show or Cancelled
     cancelled       TINYINT(1)   NOT NULL DEFAULT 0,
     no_show         TINYINT(1)   NOT NULL DEFAULT 0,
     removed         TINYINT(1)   NOT NULL DEFAULT 0,       -- no longer in Treatwell's calendar for that day

@@ -8,7 +8,7 @@
     const CHANNEL = 'tw-bookings-sync';
     const MAX_CAPTURES = 60;
     // Answers from these pages are never treated as bookings (reviews, reports, …).
-    const NOT_BOOKINGS_URL = /review|rating|notification|message|report|statistic|analytics|marketing|invoice|payment|transaction|sale|voucher|setting|translation|i18n|feature/i;
+    const NOT_BOOKINGS_URL = /review|rating|notification|message|report|statistic|analytics|marketing|invoice|payment|transaction|sale|voucher|setting|translation|i18n|feature|activity|appointment-events|waiting-list|waitlist|point-of-sale/i;
 
     const captures = new Map();           // request → latest answer { url, method, at, json, count, fromSource }
     const lookups = { staff: {}, service: {}, customer: {} };

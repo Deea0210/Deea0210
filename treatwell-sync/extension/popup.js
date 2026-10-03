@@ -10,10 +10,24 @@
         const d = new Date();
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     };
+    const nowTime = () => {
+        const d = new Date();
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
     const clock = (ms) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const money = (v) => '£' + v.toFixed(2);
 
+    // Which bookings to show. "Happening" leaves out no-shows and cancelled bookings.
+    const happening = (b) => !b.cancelled && !b.noShow;
+    const VIEWS = [
+        { key: 'happening', label: 'Happening', test: happening },
+        { key: 'upcoming', label: 'Still to come', test: (b, now) => happening(b) && !b.completed && (b.end || b.start) > now },
+        { key: 'missed', label: 'No-shows', test: (b) => !happening(b), hideWhenEmpty: true },
+    ];
+
     let state = null, settings = {}, staffFilter = '';
+    let view = 'happening';
+    try { view = localStorage.getItem('view') || view; } catch (e) { /* default view */ }
 
     function el(tag, cls, ...children) {
         const node = document.createElement(tag);
@@ -26,6 +40,13 @@
         const day = state && state.days && state.days[todayKey()];
         if (!day) return [];
         return Object.values(day.bookings).sort((a, b) => (a.start + a.staff).localeCompare(b.start + b.staff));
+    }
+
+    /** The bookings on screen: the chosen view, then the chosen stylist. */
+    function shown() {
+        const v = VIEWS.find(x => x.key === view) || VIEWS[0];
+        const now = nowTime();
+        return todays().filter(b => v.test(b, now) && (!staffFilter || b.staff === staffFilter));
     }
 
     function setStatus(node, text, tone) {
@@ -73,23 +94,48 @@
         }
     }
 
+    function badges(b) {
+        if (b.cancelled) return el('span', 'badge badge--cancelled', b.status || 'Cancelled');
+        if (b.noShow) return el('span', 'badge badge--noshow', 'No-show');
+        if (b.completed) return el('span', 'badge badge--done', 'Done');
+        if (/unconfirmed/i.test(b.status || '')) return el('span', 'badge badge--unconfirmed', 'Unconfirmed');
+        return '';
+    }
+
     function render() {
         if (!state) return;
         $('date').textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
         renderStatus();
 
         const all = todays();
-        const staff = [...new Set(all.map(b => b.staff).filter(Boolean))].sort();
-        if (staffFilter && !staff.includes(staffFilter)) staffFilter = '';
-        const shown = all.filter(b => !staffFilter || b.staff === staffFilter);
+        const now = nowTime();
+        const visibleViews = VIEWS.filter(v => !v.hideWhenEmpty || all.some(b => v.test(b, now)) || view === v.key);
+        if (!visibleViews.some(v => v.key === view)) view = 'happening';
+        $('views').replaceChildren(...visibleViews.map(v => {
+            const n = all.filter(b => v.test(b, now)).length;
+            const btn = el('button', 'view', v.label, el('span', '', ` ${n}`));
+            btn.type = 'button';
+            btn.setAttribute('role', 'tab');
+            btn.setAttribute('aria-selected', String(v.key === view));
+            btn.addEventListener('click', () => {
+                view = v.key;
+                try { localStorage.setItem('view', view); } catch (e) { /* not remembered */ }
+                render();
+            });
+            return btn;
+        }));
 
-        const live = all.filter(b => !b.cancelled);
-        const cancelled = all.length - live.length;
-        const value = live.reduce((sum, b) => sum + (typeof b.price === 'number' ? b.price : 0), 0);
+        const inView = all.filter(b => (VIEWS.find(x => x.key === view) || VIEWS[0]).test(b, now));
+        const staff = [...new Set(inView.map(b => b.staff).filter(Boolean))].sort();
+        if (staffFilter && !staff.includes(staffFilter)) staffFilter = '';
+        const list = shown();
+
+        const value = list.reduce((sum, b) => sum + (typeof b.price === 'number' ? b.price : 0), 0);
+        const done = list.filter(b => b.completed).length;
         $('summary').replaceChildren(
-            el('span', '', el('strong', '', String(live.length)), live.length === 1 ? ' booking' : ' bookings'),
-            cancelled ? el('span', '', el('strong', '', String(cancelled)), ' cancelled') : '',
-            value ? el('span', '', el('strong', '', money(value)), ' booked') : '',
+            el('span', '', el('strong', '', String(list.length)), list.length === 1 ? ' booking' : ' bookings'),
+            view === 'happening' && done ? el('span', '', el('strong', '', String(done)), ' done') : '',
+            value && view !== 'missed' ? el('span', '', el('strong', '', money(value)), staffFilter ? ` for ${staffFilter}` : ' booked') : '',
         );
 
         $('filters').replaceChildren(...(staff.length > 1 ? ['', ...staff] : []).map(name => {
@@ -101,22 +147,19 @@
         }));
 
         const listEl = $('bookings');
-        listEl.dataset.empty = state.connect && state.connect.seenAt ? 'No bookings for today.' : 'No bookings read yet.';
-        listEl.replaceChildren(...shown.map(b => {
-            const item = el('li', 'booking' + (b.cancelled ? ' booking--cancelled' : ''),
-                el('div', 'booking__time', b.start, b.end ? el('small', '', '– ' + b.end) : ''),
-                el('div', '',
-                    el('div', 'booking__client', b.customer || 'Client',
-                        b.cancelled ? el('span', 'badge badge--cancelled', 'Cancelled') : '',
-                        b.noShow ? el('span', 'badge badge--noshow', 'No-show') : ''),
-                    el('div', 'booking__service', b.service || ''),
-                    b.phone || b.status ? el('div', 'booking__meta', [b.phone, b.status && !b.cancelled ? b.status.toLowerCase().replace(/_/g, ' ') : ''].filter(Boolean).join(' · ')) : '',
-                    b.notes ? el('div', 'booking__notes', b.notes) : ''),
-                el('div', 'booking__side',
-                    b.staff ? el('span', 'booking__staff', b.staff) : '',
-                    typeof b.price === 'number' ? el('div', 'booking__price', money(b.price)) : ''));
-            return item;
-        }));
+        listEl.dataset.empty = !(state.connect && state.connect.seenAt) ? 'No bookings read yet.'
+            : view === 'upcoming' ? 'Nothing more today.' : view === 'missed' ? 'No no-shows today.' : 'No bookings for today.';
+        listEl.replaceChildren(...list.map(b => el('li',
+            'booking' + (b.cancelled || b.noShow ? ' booking--cancelled' : '') + (b.completed ? ' booking--done' : ''),
+            el('div', 'booking__time', b.start, b.end ? el('small', '', '– ' + b.end) : ''),
+            el('div', '',
+                el('div', 'booking__client', b.customer || 'Client', badges(b)),
+                el('div', 'booking__service', b.service || ''),
+                b.phone ? el('div', 'booking__meta', b.phone) : '',
+                b.notes ? el('div', 'booking__notes', b.notes) : ''),
+            el('div', 'booking__side',
+                b.staff ? el('span', 'booking__staff', b.staff) : '',
+                typeof b.price === 'number' ? el('div', 'booking__price', money(b.price)) : ''))));
     }
 
     async function load() {
@@ -160,14 +203,15 @@
         setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
 
+    // Copy and CSV take what's on screen (view + stylist).
     $('copy').addEventListener('click', async () => {
-        const lines = todays().map(b => [
+        const lines = shown().map(b => [
             `${b.start}${b.end ? '–' + b.end : ''}`,
             b.customer || 'Client',
             b.service,
             b.staff ? `(${b.staff})` : '',
             typeof b.price === 'number' ? money(b.price) : '',
-            b.cancelled ? 'CANCELLED' : '',
+            b.cancelled || b.noShow ? (b.status || 'Cancelled').toUpperCase() : '',
         ].filter(Boolean).join('  '));
         await navigator.clipboard.writeText(lines.join('\n') || 'No bookings');
         $('copy').textContent = 'Copied ✓';
@@ -180,10 +224,11 @@
             const safe = /^[=+\-@]/.test(s) ? "'" + s : s; // stops spreadsheets running it as a formula
             return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
         };
-        const head = ['Date', 'Start', 'End', 'Client', 'Phone', 'Email', 'Service', 'Stylist', 'Price', 'Status', 'Cancelled', 'Notes', 'Treatwell ID'];
-        const rows = todays().map(b => [b.date, b.start, b.end, b.customer, b.phone, b.email, b.service, b.staff,
-            typeof b.price === 'number' ? b.price.toFixed(2) : '', b.status, b.cancelled ? 'yes' : '', b.notes, b.id]);
-        download(`treatwell-bookings-${todayKey()}.csv`, 'text/csv', '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'));
+        const head = ['Date', 'Start', 'End', 'Client', 'Phone', 'Email', 'Service', 'Stylist', 'Price', 'Status', 'Notes', 'Treatwell ID'];
+        const rows = shown().map(b => [b.date, b.start, b.end, b.customer, b.phone, b.email, b.service, b.staff,
+            typeof b.price === 'number' ? b.price.toFixed(2) : '', b.status, b.notes, b.id]);
+        const suffix = view === 'happening' ? '' : '-' + view;
+        download(`treatwell-bookings-${todayKey()}${suffix}.csv`, 'text/csv', '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'));
     });
 
     $('sample').addEventListener('click', async () => {
@@ -197,5 +242,5 @@
     });
 
     load();
-    if (asPage) setInterval(render, 60000); // keeps the date right on an all-day reception screen
+    setInterval(render, 60000); // "Still to come" and the date move on by themselves
 })();

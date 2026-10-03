@@ -28,9 +28,10 @@ from Treatwell's servers in your logged-in Chrome:
   or stores your Treatwell password, and makes one small request per refresh.
 - If Connect is logged out or closed, the list keeps the last bookings and says what to do.
 
-> **First-time check.** Treatwell doesn't publish its data format, so the reading was built to cope with the
-> usual ways booking systems lay out their data and was tested on a pretend Connect site, not the real one.
-> After installing, compare the list with the Connect calendar. If anything is missing or wrong, click
+> **Fitted to the real Connect.** The reading was fitted to the layout of the real Connect calendar (from a setup
+> file with no personal details): `calendar.json` appointments and packages, with Treatwell's status codes
+> CR (unconfirmed), CN (confirmed), CP (completed), NS (no-show) and CC (cancelled). The pretend Connect site used
+> by the tests copies that layout. If Treatwell changes something, click
 > **"Bookings look wrong? Save a setup file"** in the extension and send the file to your developer. It contains the
 > layout of the data with **no client names, phone numbers, emails or login tokens**, which is enough to fit the
 > reading exactly.
@@ -57,10 +58,17 @@ this way. To update later: replace the folder's contents and click the ↻ butto
 ## Using it
 
 - **Click the icon:** today's bookings in time order, with client, phone, service, stylist, price and notes.
-  Cancelled ones are crossed out. Tap a stylist's name to see only theirs. The number on the icon is today's
-  bookings; a red **!** means Connect is logged out or the salon software couldn't be reached.
+  Three tabs:
+  - **Happening**: the bookings taking place today (Treatwell's confirmed, unconfirmed and completed ones).
+    No-shows and cancelled bookings are left out, also from the count and the total. Completed ones are marked
+    *Done*, and online bookings not yet accepted are marked *Unconfirmed*.
+  - **Still to come**: the ones in progress or later today that aren't done yet.
+  - **No-shows**: only appears when there are some.
+
+  Tap a stylist's name to see only theirs. The number on the icon is today's bookings that are happening; a red
+  **!** means Connect is logged out or the salon software couldn't be reached.
 - **Open as a page** (arrow icon) for a full-window list on a reception screen. It updates by itself.
-- **Copy list** or **Download CSV** (opens in Excel).
+- **Copy list** or **Download CSV** (opens in Excel): exactly what's on screen (tab and stylist).
 - **Settings** (gear icon): how often to refresh (default 5 minutes) and the salon software connection.
 
 ## Send the bookings to the salon software (optional)
@@ -96,14 +104,16 @@ Today's list is sent whenever it changes (and retried if the server can't be rea
 }
 ```
 
-`bookings.php` saves each booking in `treatwell_bookings` (one row per Treatwell booking, updated in place).
+The list sent has every booking of the day with its `status` (Confirmed, Unconfirmed, Completed, No-show,
+Cancelled), so the salon software can choose. `bookings.php` saves each booking in `treatwell_bookings` (one row per
+Treatwell booking, updated in place, with `no_show` and `cancelled` flags).
 When `complete` is true the list is the whole day as the Connect calendar shows it, so bookings of that day that
 are no longer in it are marked `removed = 1`.
 
 ```sql
 SELECT TIME_FORMAT(start_time, '%H:%i') AS time, customer_name, service, staff_name, price
 FROM treatwell_bookings
-WHERE booking_date = CURDATE() AND removed = 0 AND cancelled = 0
+WHERE booking_date = CURDATE() AND removed = 0 AND cancelled = 0 AND no_show = 0   -- happening today
 ORDER BY start_time;
 ```
 

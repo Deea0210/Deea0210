@@ -40,6 +40,10 @@ h1 { margin: 0; font-size: 1.15rem; }
 .status--warn { background: var(--warn-soft); color: var(--warn); }
 .status--bad { background: var(--bad-soft); color: var(--bad); }
 
+.views { display: flex; gap: 4px; margin: 8px 16px 4px; padding: 3px; border-radius: 10px; background: var(--soft); }
+.view { flex: 1; padding: 6px 8px; border: 0; border-radius: 8px; background: none; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.view[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
+.view span { font-weight: 400; }
 .summary { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 16px 4px; color: var(--muted); font-size: 0.86rem; }
 .summary strong { color: var(--ink); }
 .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 16px 8px; }
@@ -63,6 +67,9 @@ body.page .bookings { max-height: none; }
 .badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; vertical-align: 1px; }
 .badge--cancelled { background: var(--bad-soft); color: var(--bad); }
 .badge--noshow { background: var(--warn-soft); color: var(--warn); }
+.badge--done { background: var(--accent-soft); color: var(--accent); }
+.badge--unconfirmed { background: var(--warn-soft); color: var(--warn); }
+.booking--done .booking__time, .booking--done .booking__client, .booking--done .booking__service { color: var(--muted); }
 .booking--cancelled .booking__client, .booking--cancelled .booking__service, .booking--cancelled .booking__time { text-decoration: line-through; color: var(--muted); }
 
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--line); }
@@ -71,6 +78,6 @@ body.page .bookings { max-height: none; }
 .link { margin-left: auto; border: 0; background: none; padding: 4px 0; color: var(--muted); font-size: 0.8rem; text-decoration: underline; }
 
 @media print {
-    .head__actions, .foot, .filters, .status { display: none !important; }
+    .head__actions, .foot, .filters, .views, .status { display: none !important; }
     body.page { padding: 0; }
 }

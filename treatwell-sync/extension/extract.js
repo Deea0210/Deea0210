@@ -38,11 +38,11 @@
         customerFirst: list('customerFirstName', 'clientFirstName', 'guestFirstName', 'consumerFirstName'),
         customerLast: list('customerLastName', 'customerSurname', 'clientLastName', 'guestLastName', 'consumerLastName'),
         phone: list('phone', 'phoneNumber', 'mobile', 'mobileNumber', 'mobilePhone', 'telephone', 'tel', 'contactNumber',
-            'customerPhone', 'customerPhoneNumber', 'clientPhone', 'clientMobile'),
-        email: list('email', 'emailAddress', 'customerEmail', 'clientEmail'),
+            'customerPhone', 'customerPhoneNumber', 'clientPhone', 'clientMobile', 'consumerPhone', 'consumerMobile', 'guestPhone'),
+        email: list('email', 'emailAddress', 'customerEmail', 'clientEmail', 'consumerEmail', 'guestEmail'),
         price: list('price', 'totalPrice', 'priceAmount', 'fullPrice', 'salePrice', 'amount', 'total', 'totalAmount', 'orderTotal',
             'amountDue', 'cost', 'priceIncludingVat'),
-        status: list('status', 'appointmentStatus', 'bookingStatus', 'state'),
+        status: list('appointmentStatusCode', 'statusCode', 'bookingStatusCode', 'status', 'appointmentStatus', 'bookingStatus', 'state'),
         notes: list('notes', 'note', 'notesForVenue', 'customerNotes', 'clientNotes', 'bookingNotes', 'comment', 'comments', 'remarks'),
         channel: list('channel', 'bookingChannel', 'bookingSource', 'source', 'bookingActor', 'bookedVia', 'origin', 'platform'),
         name: list('fullName', 'displayName', 'name', 'title', 'label'),
@@ -51,7 +51,9 @@
     };
 
     // Lists under these keys are rotas, opening hours, blocked time… never bookings.
-    const NOT_BOOKING_LIST = /shift|rota|schedule|workinghour|openinghour|hours|block|break|absence|holiday|timeoff|availab|slot|closure|closed|template|rule|review|rating|notification|message|sale|transaction|payment|invoice|receipt|voucher|report|statistic|stats/;
+    const NOT_BOOKING_LIST = /shift|rota|schedule|workinghour|openinghour|hours|block|break|absence|holiday|timeoff|availab|slot|closure|closed|template|rule|review|rating|notification|message|sale|transaction|payment|invoice|receipt|voucher|report|statistic|stats|waiting|waitlist|appointmentevent|activit/;
+    // Treatwell Connect's appointment status codes (appointmentStatusCode).
+    const STATUS_CODES = { CR: 'Unconfirmed', CN: 'Confirmed', CP: 'Completed', NS: 'No-show', CC: 'Cancelled', RJ: 'Rejected' };
     // …and objects with one of these types are blocked time, not a client booking.
     const NOT_BOOKING_TYPE = /block|break|lunch|holiday|absence|shift|working|closed|closure|unavailable|timeoff|time_off|rota|schedule|personal/i;
     const LOOKUP_KEYS = {
@@ -307,7 +309,8 @@
         const service = servicesOf(o, ix, lookups);
         const customer = customerOf(o, ix, ctx, lookups);
         const staff = entity(o, ix, F.staff, F.staffId, lookups.staff) || ctx.staff || '';
-        const status = text(first(o, ix, F.status)) || ctx.status || '';
+        const statusCode = text(first(o, ix, F.status)) || ctx.status || '';
+        const status = STATUS_CODES[statusCode.toUpperCase()] || statusCode;
         const priceKey = firstKey(ix, F.price);
         let price = priceKey === undefined ? null : money(o[priceKey], priceKey);
         if (price === null) price = service.price;
@@ -324,15 +327,16 @@
             staff,
             price: price === null || isNaN(price) ? null : Math.round(price * 100) / 100,
             status,
+            statusCode,
             cancelled: /cancel|declin|reject|delet|void|refund/i.test(status) || flag(['cancelled', 'canceled', 'isCancelled', 'isCanceled']),
             noShow: /no.?show/i.test(status) || flag(['noShow', 'isNoShow']),
+            completed: /complet|checked.?out|finished/i.test(status) || flag(['completed', 'isCompleted', 'checkedOut']),
             notes: text(first(o, ix, F.notes)) || ctx.notes || '',
             channel: text(first(o, ix, F.channel)) || ctx.channel || '',
         };
-        const ownId = idOf(first(o, ix, F.id));
-        booking.id = ownId
-            ? (ctx.groupId && !/^\d{6,}$|^[0-9a-f-]{20,}$/i.test(ownId) ? `${ctx.groupId}-${ownId}` : ownId)
-            : 'tw-' + hash([booking.date, booking.start, booking.staff, booking.customer, booking.service, ctx.groupId || ''].join('|'));
+        // Treatwell's ids are unique on their own (a package's services keep their ids).
+        booking.id = idOf(first(o, ix, F.id))
+            || 'tw-' + hash([booking.date, booking.start, booking.staff, booking.customer, booking.service, ctx.groupId || ''].join('|'));
         return booking;
     }
 

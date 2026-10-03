@@ -1,6 +1,6 @@
 /*
  * End-to-end test: Chromium with the extension installed, the pretend Connect calendar
- * (tests/mock-connect/server.py) and the PHP receiver with MySQL.
+ * (tests/mock-connect/server.py, same data layout as the real Connect) and the PHP receiver with MySQL.
  *
  *   sudo python3 tests/mock-connect/server.py &      (https on 127.0.0.1:443, controls on :8444)
  *   TREATWELL_SYNC_KEY=… TREATWELL_DB_DSN=… php -S 127.0.0.1:8301 -t receiver/api &
@@ -22,6 +22,7 @@ const db = (sql) => execFileSync('mysql', ['-uroot', 'salon_test', '-N', '-e', s
 const pad = (n) => String(n).padStart(2, '0');
 const d = new Date();
 const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const LUNCHTIME = new Date(`${TODAY}T12:10:00`); // the popup's clock, for "Still to come"
 
 let failures = 0;
 function check(name, ok, detail) {
@@ -61,6 +62,12 @@ async function shot(page, name) {
     await page.screenshot({ path: path.join(SHOTS, name), fullPage: true });
 }
 const rowsOf = (page) => page.$$eval('.booking', els => els.map(e => e.innerText.replace(/\s+/g, ' ').trim()));
+const viewTabs = (page) => page.$$eval('.view', els => els.map(e => e.textContent.trim()));
+async function pickView(page, label) {
+    await page.click(`.view:has-text("${label}")`);
+    await page.waitForTimeout(100);
+    return rowsOf(page);
+}
 
 // 1) Reception opens the Connect calendar as usual
 const connect = await context.newPage();
@@ -70,20 +77,33 @@ await connect.waitForSelector('#list li');
 check('Connect calendar still works with the extension installed', (await connect.textContent('#list')).includes('Skin Fade'));
 await sleep(1200);
 
-// 2) The popup lists today's bookings
+// 2) The popup lists the bookings happening today
 const popup = await context.newPage();
 popup.on('pageerror', e => errors.push('popup: ' + e.message));
-await popup.setViewportSize({ width: 420, height: 640 });
+await popup.clock.setFixedTime(LUNCHTIME);
+await popup.setViewportSize({ width: 420, height: 720 });
 await popup.goto(`chrome-extension://${extId}/popup.html`);
 await popup.waitForSelector('.booking', { timeout: 10000 });
-let rows = await rowsOf(popup);
-check('3 bookings for today, in time order', rows.length === 3 && rows[0].startsWith('09:00') && rows[2].startsWith('14:00'), rows);
-check('stylist names come from the employees list', rows.some(r => r.includes('Renato')) && rows.some(r => r.includes('Mohammad A')), rows);
-check('client, service and price are read', rows.some(r => r.includes('John Smith') && r.includes('Skin Fade') && r.includes('£15.75')), rows);
-check('reviews, lunch breaks and working hours are not bookings', !rows.some(r => /Happy Client|Lunch|18:00/.test(r)), rows);
+let rows = await pickView(popup, 'Happening');
+check('Happening: 6 bookings in time order (the no-show is left out)',
+    rows.length === 6 && rows[0].startsWith('09:00') && !rows.some(r => r.includes('Nora West')), rows);
+check('stylist, client, phone, service and price are read', rows.some(r => r.includes('John Smith') && r.includes('+44 7700 900123')
+    && r.includes('Skin Fade') && r.includes('S.Renato') && r.includes('£15.75')), rows);
+check('a completed booking is marked Done', rows.some(r => r.includes('Paul Kim') && /Done/i.test(r)), rows);
+check('a package (two services) shows once per service', rows.filter(r => r.includes('Valentina')).length === 2, rows);
+check('activity feed, waiting list and lunch blocks are not bookings', !rows.some(r => /Booked Today|Waiting Client|Lunch/.test(r)), rows);
 check('tomorrow\'s booking is not in today\'s list', !rows.some(r => r.includes('Sam Lee')), rows);
+check('tabs show the counts', JSON.stringify(await viewTabs(popup)) === JSON.stringify(['Happening 6', 'Still to come 3', 'No-shows 1']), await viewTabs(popup));
 check('status line says it is up to date', /Updated \d\d:\d\d/.test(await popup.textContent('#status')), await popup.textContent('#status'));
-await shot(popup, '1-popup.png');
+await shot(popup, '1-happening.png');
+
+rows = await pickView(popup, 'Still to come');
+check('Still to come at 12:10: the one in progress and the later ones, not finished or done ones',
+    JSON.stringify(rows.map(r => r.slice(0, 5))) === JSON.stringify(['12:00', '12:35', '14:00']), rows);
+await shot(popup, '2-still-to-come.png');
+rows = await pickView(popup, 'No-shows');
+check('No-shows tab lists the no-show', rows.length === 1 && rows[0].includes('Nora West') && /No-show/i.test(rows[0]), rows);
+await pickView(popup, 'Happening');
 
 // 3) Settings: send to the salon software
 const options = await context.newPage();
@@ -96,37 +116,51 @@ await options.waitForFunction(() => !/Testing/.test(document.getElementById('sta
 check('Test connection reaches the receiver', (await options.textContent('#status')).startsWith('Connected'), await options.textContent('#status'));
 await options.click('button[type=submit]');
 await options.waitForFunction(() => /Saved/.test(document.getElementById('status').textContent));
-await shot(options, '3-settings.png');
 await options.close();
 await sleep(1500);
-let stored = db(`SELECT treatwell_id, TIME_FORMAT(start_time,'%H:%i'), staff_name, customer_name, cancelled, removed FROM treatwell_bookings WHERE booking_date='${TODAY}' ORDER BY start_time`);
-check('the 3 bookings are saved in the salon database', stored.split('\n').length === 3 && stored.includes('John Smith'), stored);
+let stored = db(`SELECT treatwell_id, status, no_show, removed FROM treatwell_bookings WHERE booking_date='${TODAY}' ORDER BY treatwell_id`);
+check('all 7 bookings saved with their status', stored === [
+    '501\tConfirmed\t0\t0', '502\tConfirmed\t0\t0', '503\tConfirmed\t0\t0', '505\tNo-show\t1\t0',
+    '506\tCompleted\t0\t0', '507\tConfirmed\t0\t0', '508\tConfirmed\t0\t0'].join('\n'), stored);
 
 // 4) Things change in Treatwell; reception has moved the calendar to tomorrow
-await ctl('/cancel?id=502');
+await ctl('/status?id=502&code=CC');   // cancelled: Connect's calendar no longer lists it
 await ctl('/delete?id=503');
-await ctl('/add');
+await ctl('/status?id=501&code=NS');   // marked as no-show
+await ctl('/add');                     // new online booking, not confirmed yet
 await connect.click('#next');
 await connect.waitForFunction(() => document.getElementById('list').textContent.includes('Wash'));
 await sleep(800);
 await worker.evaluate(() => refreshNow()); // what the 5-minute timer does
 await sleep(1500);
 rows = await rowsOf(popup);
-check('refresh picks up a new booking', rows.some(r => r.includes('Lucy Hall') && r.includes('16:30')), rows);
-check('a cancelled booking is marked cancelled', rows.some(r => r.includes('Ali K') && /Cancelled/i.test(r)), rows);
-check('a booking removed in Treatwell disappears', !rows.some(r => r.includes('Emma Jones')), rows);
+check('refresh picks up the new booking, marked Unconfirmed', rows.some(r => r.includes('Lucy Hall') && /Unconfirmed/i.test(r)), rows);
+check('cancelled and removed bookings disappear', !rows.some(r => /Ali K|Emma Jones/.test(r)), rows);
+check('a booking marked no-show leaves Happening', !rows.some(r => r.includes('John Smith')), rows);
 check('still only today\'s bookings although the calendar shows tomorrow', !rows.some(r => r.includes('Sam Lee')), rows);
-stored = db(`SELECT treatwell_id, cancelled, removed FROM treatwell_bookings WHERE booking_date='${TODAY}' ORDER BY treatwell_id`);
-check('database: 502 cancelled, 503 removed, 504 added', stored === '501\t0\t0\n502\t1\t0\n503\t0\t1\n504\t0\t0', stored);
-await shot(popup, '2-popup-after-changes.png');
+rows = await pickView(popup, 'No-shows');
+check('No-shows tab now has both no-shows', rows.length === 2, rows);
+await pickView(popup, 'Happening');
+stored = db(`SELECT treatwell_id, status, no_show, removed FROM treatwell_bookings WHERE booking_date='${TODAY}' ORDER BY treatwell_id`);
+check('database: 501 no-show, 502 and 503 removed, 504 added', stored === [
+    '501\tNo-show\t1\t0', '502\tConfirmed\t0\t1', '503\tConfirmed\t0\t1', '504\tUnconfirmed\t0\t0', '505\tNo-show\t1\t0',
+    '506\tCompleted\t0\t0', '507\tConfirmed\t0\t0', '508\tConfirmed\t0\t0'].join('\n'), stored);
+check('toolbar badge counts the bookings happening today', (await worker.evaluate(() => chrome.action.getBadgeText({}))) === '4');
+await shot(popup, '3-after-changes.png');
 
 const log = await ctl('/log');
-const replays = log.filter(r => r.path.includes(`date-from=${TODAY}`));
-check('automatic refresh asked Treatwell for today, with the login token and cookie',
-    replays.length >= 2 && replays.every(r => r.auth && r.cookie), replays.slice(-2));
+const replays = log.filter(r => r.path.includes('calendar.json') && r.path.includes(`date-from=${TODAY}`));
+check('automatic refresh asked Treatwell for today, with the login cookie and the page\'s headers',
+    replays.length >= 2 && replays.every(r => r.header && r.cookie), replays.slice(-2));
 check('the extension never sent anything but reads to Treatwell', log.every(r => r.method === 'GET'), log.filter(r => r.method !== 'GET'));
 
-// 5) Logged out of Connect
+// 5) CSV = what's on screen
+const [csvFile] = await Promise.all([popup.waitForEvent('download'), popup.click('#csv')]);
+const csv = readFileSync(await csvFile.path(), 'utf8');
+check('CSV has the happening bookings only', csv.split('\r\n').length === 5 && !/Nora West|John Smith/.test(csv) && csv.includes('Unconfirmed'),
+    csv.split('\r\n').map(l => l.slice(0, 60)));
+
+// 6) Logged out of Connect
 await ctl('/logout');
 await popup.click('#refresh');
 await popup.waitForFunction(() => /logged out/.test(document.getElementById('status').textContent), null, { timeout: 25000 });
@@ -134,23 +168,23 @@ check('logged-out Connect is reported', true);
 check('toolbar badge shows "!"', (await worker.evaluate(() => chrome.action.getBadgeText({}))) === '!');
 await ctl('/login');
 
-// 6) Setup file without personal details
+// 7) Setup file without personal details
 const [download] = await Promise.all([popup.waitForEvent('download'), popup.click('#sample')]);
 const sample = readFileSync(await download.path(), 'utf8');
-check('setup file has the shape of the data', sample.includes('"bookingsSource"') && sample.includes('/api/v1/venue/42/calendar'));
-check('setup file has no names, phones or token', !/John|Smith|Lucy|Hall|07700|07123|Bearer|tok-/.test(sample),
-    (sample.match(/John|Smith|Lucy|Hall|07700|07123|Bearer|tok-/g) || []));
+check('setup file has the shape of the data', sample.includes('"bookingsSource"') && sample.includes('/api/venue/42/calendar.json'));
+check('setup file has no names, phones or emails', !/John|Smith|Lucy|Hall|7700|7123|example\.com|Valentina/.test(sample),
+    (sample.match(/John|Smith|Lucy|Hall|7700|7123|example\.com|Valentina/g) || []));
 
-// 7) Connect closed
+// 8) Connect closed
 await connect.close();
 await worker.evaluate(() => refreshNow());
 await popup.reload();
 await popup.waitForSelector('#status');
 check('closed Connect tab is reported', /Open Treatwell Connect/.test(await popup.textContent('#status')), await popup.textContent('#status'));
-check('the list stays available while Connect is closed', (await rowsOf(popup)).length === 3);
+check('the list stays available while Connect is closed', (await rowsOf(popup)).length === 4);
 
-// Full-page view (for a reception screen)
 const page = await context.newPage();
+await page.clock.setFixedTime(LUNCHTIME);
 await page.goto(`chrome-extension://${extId}/popup.html?page=1`);
 await page.waitForSelector('.booking');
 await shot(page, '4-page-view.png');

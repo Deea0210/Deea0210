@@ -79,8 +79,8 @@ test('an order holding several appointments: one row each, client from the order
     const b = read(json);
     assert.equal(b.length, 2);
     assert.deepEqual(b.map(x => [x.start, x.service, x.customer, x.phone, x.channel, x.id]), [
-        ['11:00', 'Wash', 'Lucy Hall', '07123', 'ONLINE', 'TW-889-1'],
-        ['11:30', 'Skin Fade', 'Lucy Hall', '07123', 'ONLINE', 'TW-889-2'],
+        ['11:00', 'Wash', 'Lucy Hall', '07123', 'ONLINE', '1'],
+        ['11:30', 'Skin Fade', 'Lucy Hall', '07123', 'ONLINE', '2'],
     ]);
 });
 
@@ -91,6 +91,37 @@ test('GraphQL answer with edges/nodes', () => {
     ] } } } };
     const [b] = read(json);
     assert.deepEqual([b.start, b.staff, b.service, b.customer, b.price, b.status], ['16:00', 'Ioana', 'Eyebrow Threading', 'Mia', 9, 'BOOKED']);
+});
+
+test('Treatwell Connect calendar.json: status codes, packages, consumer phone and email', () => {
+    const appt = (id, code, start, end, extra) => Object.assign({ id, appointmentDate: D, appointmentStatusCode: code, bookingActor: 'SUPPLIER',
+        consumerName: 'Client ' + id, consumerFirstName: 'Client', created: '2026-09-01T10:00:00Z', amount: 20, employeeId: 1,
+        employeeName: 'S.Tsegi', startTime: start, endTime: end, notes: '', offerName: 'Wash & Blow Dry', skus: [{ skuId: 2, skuName: 'Long hair' }],
+        cancellationPeriodEndDate: `${D}T09:00:00Z`, noShowTimeLimit: `${D}T22:59:59Z` }, extra);
+    const json = {
+        appointments: [
+            appt(1, 'CN', '09:00', '09:30', { consumerPhone: '+44 7557 000000', consumerEmail: 'c@example.com' }),
+            appt(2, 'CP', '09:30', '10:00'),
+            appt(3, 'NS', '10:00', '10:30'),
+            appt(4, 'CR', '11:00', '11:30'),
+            appt(5, 'CN', '12:00', '12:35'),
+        ],
+        appointmentGroups: [{ id: 900, name: 'Package', price: { amount: 59.5 }, startTime: '12:00', endTime: '13:05',
+            customer: { id: 9, name: 'Valentina', phone: '+44 7932 000000' }, appointmentStatusCode: 'CN', type: 'PACKAGE', appointmentDate: D,
+            appointments: [appt(5, 'CN', '12:00', '12:35'), appt(6, 'CN', '12:35', '13:05')] }],
+        blocks: [{ employeeId: 1, itemDate: D, itemTimeFrom: '16:20', itemTimeTo: '16:55', name: 'Lunch', timeFrom: '16:20', timeTo: '16:55', type: 'IL' }],
+    };
+    const b = read(json);
+    assert.equal(b.length, 6, 'appointment 5 is in the list and in the package: shown once');
+    assert.deepEqual(b.map(x => [x.id, x.status, x.noShow, x.completed, x.cancelled]), [
+        ['1', 'Confirmed', false, false, false], ['2', 'Completed', false, true, false], ['3', 'No-show', true, false, false],
+        ['4', 'Unconfirmed', false, false, false], ['5', 'Confirmed', false, false, false], ['6', 'Confirmed', false, false, false]]);
+    assert.equal(b[0].phone, '+44 7557 000000');
+    assert.equal(b[0].email, 'c@example.com');
+    assert.equal(b[0].staff, 'S.Tsegi');
+    const events = { appointmentEventDatas: [{ appointmentEventType: 'CREATED', appointmentId: 7, occurredAt: `${D}T08:00:00Z`,
+        appointmentLocalDateTime: '2026-10-08T13:15:00', currentAppointmentStatus: 'CONFIRMED', recipientName: 'X', employeeName: 'Y' }] };
+    assert.equal(read(events).length, 0, 'the activity feed (bookings made today) is not the day\'s bookings');
 });
 
 test('things that are not bookings are ignored', () => {

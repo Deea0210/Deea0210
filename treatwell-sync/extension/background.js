@@ -184,7 +184,7 @@ async function sendToSalon(force) {
 
 async function updateBadge() {
     const state = await getState();
-    const live = todaysBookings(state).filter(b => !b.cancelled);
+    const live = todaysBookings(state).filter(b => !b.cancelled && !b.noShow); // the bookings happening today
     const problem = (state.refresh.reason === 'logged-out') || (state.send.ok === false && (await getSettings()).apiUrl);
     await chrome.action.setBadgeText({ text: problem ? '!' : live.length ? String(live.length) : '' });
     await chrome.action.setBadgeBackgroundColor({ color: problem ? '#b91c1c' : '#0f766e' });
