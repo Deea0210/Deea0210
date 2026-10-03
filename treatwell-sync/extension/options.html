@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Salon Bookings Sync settings</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body { width: auto; max-width: 620px; max-height: none; margin: 0 auto; padding: 24px 16px; }
+        h1 { margin-bottom: 4px; }
+        form { display: grid; gap: 14px; margin-top: 18px; }
+        label { display: grid; gap: 5px; font-weight: 600; }
+        label small { font-weight: 400; color: var(--muted); }
+        input, select { padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; font: inherit; }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn--primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+        .btn--primary:hover { background: #115e59; }
+        .status { margin: 0; }
+        .note { color: var(--muted); font-size: 0.86rem; }
+    </style>
+</head>
+<body>
+    <h1>Salon Bookings Sync</h1>
+    <p class="note">Reads today's bookings from the Treatwell Connect calendar open in this Chrome. The list works on its own;
+        fill in the salon software below to also send the bookings there.</p>
+
+    <form id="form">
+        <label>Refresh every
+            <select name="refreshMinutes">
+                <option value="2">2 minutes</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+            </select>
+        </label>
+        <label>Salon software address <small>The bookings receiver, e.g. https://your-salon-software/treatwell-api/bookings.php (leave empty to only show the list)</small>
+            <input name="apiUrl" type="url" placeholder="https://…/treatwell-api/bookings.php">
+        </label>
+        <label>Key <small>The TREATWELL_SYNC_KEY set on the server</small>
+            <input name="apiKey" type="password" autocomplete="off">
+        </label>
+        <label>This computer's name
+            <input name="device" type="text" maxlength="60" placeholder="Reception PC">
+        </label>
+        <div class="row">
+            <button class="btn btn--primary" type="submit">Save</button>
+            <button class="btn" type="button" id="test">Test connection</button>
+        </div>
+        <p class="status" id="status" hidden></p>
+    </form>
+    <script src="options.js"></script>
+</body>
+</html>

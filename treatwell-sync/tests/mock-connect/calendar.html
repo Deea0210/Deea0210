@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Calendar (test copy)</title>
+<style>body{font:14px system-ui;margin:20px}li{margin:4px 0}</style></head>
+<body>
+<h1>Pretend Connect calendar</h1>
+<p><button id="prev">◀ Day</button> <strong id="day"></strong> <button id="next">Day ▶</button></p>
+<ul id="list"></ul>
+<script>
+// Behaves like a single-page web app: a login token from the session, then data calls with it.
+let token = '', offset = 0, staff = {};
+const iso = (o) => { const d = new Date(); d.setDate(d.getDate() + o); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-'); };
+function xhrJson(url) {
+    return new Promise((resolve, reject) => {
+        const x = new XMLHttpRequest();
+        x.open('GET', url);
+        x.setRequestHeader('Authorization', 'Bearer ' + token);
+        x.onload = () => (x.status === 200 ? resolve(JSON.parse(x.responseText)) : reject(x.status));
+        x.onerror = reject;
+        x.send();
+    });
+}
+async function load() {
+    const day = iso(offset);
+    document.getElementById('day').textContent = day;
+    const r = await fetch(`/api/v1/venue/42/calendar?date-from=${day}&date-to=${day}&include=appointments,blockedTimes`, {
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, credentials: 'include' });
+    const data = await r.json();
+    document.getElementById('list').innerHTML = (data.appointments || []).map(a =>
+        `<li>${a.startTime} ${staff[a.employeeId] || '?'} – ${a.offerName} (${a.status})</li>`).join('') || '<li>No bookings</li>';
+}
+(async () => {
+    const s = await (await fetch('/api/v1/session', { credentials: 'include' })).json();
+    token = s.token;
+    const e = await xhrJson('/api/v1/venue/42/employees');
+    e.employees.forEach(x => { staff[x.id] = x.name || x.firstName; });
+    fetch('/api/v1/venue/42/reviews', { headers: { Authorization: 'Bearer ' + token } });
+    await load();
+    document.getElementById('next').onclick = () => { offset++; load(); };
+    document.getElementById('prev').onclick = () => { offset--; load(); };
+})();
+</script>
+</body>
+</html>
