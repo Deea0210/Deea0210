@@ -29,6 +29,12 @@ public sealed class Settings
     public bool PurgeStandbyMemory { get; set; } = true;
     public bool TrimAppMemory { get; set; }
 
+    /// <summary>Keep a log of temperatures, load and frame rate while Game Mode is on.</summary>
+    public bool RecordPerformance { get; set; } = true;
+
+    /// <summary>Open the report in the browser as soon as Game Mode is turned off.</summary>
+    public bool OpenReportWhenDone { get; set; } = true;
+
     public static Settings Load()
     {
         try

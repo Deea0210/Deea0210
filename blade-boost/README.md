@@ -9,6 +9,9 @@ so you can uninstall Razer Synapse.
 - **Game Mode:** one click pauses background services, closes background apps, frees cached memory and sets
   Windows to *Best performance*. **Restore** puts everything back exactly as it was.
 - **Memory:** see how RAM is used and free cached memory on demand.
+- **Performance report:** while Game Mode is on, BladeBoost keeps a log. Press **Restore** and it draws
+  you a page of graphs: temperatures, how hard the CPU and GPU worked, clock speed, power, fan speed and
+  frame rate, plus a spreadsheet of every reading.
 - **Tray icon:** minimize it while you play; fan settings and the temperature safety keep working.
 
 ## Download and first start
@@ -21,6 +24,21 @@ so you can uninstall Razer Synapse.
    If the app shows a yellow banner, click **Install PawnIO**, then restart BladeBoost. The GPU temperature works without it.
 
 Settings and a log file are stored in `%LOCALAPPDATA%\BladeBoost`.
+## The performance report
+
+Turn Game Mode on, play, then press **Restore**. A page of graphs opens in your browser showing the whole
+session second by second. **Last report** in the top right reopens the most recent one at any time.
+
+- Reports are saved in `%LOCALAPPDATA%\BladeBoost\reports`, one `.html` page and one `.csv` per session.
+- The page is self-contained, so you can email it or open it on any machine with nothing installed.
+- **Frame rate** comes from PresentMon, which arrives with NVIDIA's driver package
+  (`C:\Program Files\NVIDIA Corporation\FrameViewSDK`). Without it every other graph still works.
+- **CPU temperature** needs PawnIO, same as the live readout.
+- Sessions shorter than 10 seconds are not worth a report, so none is written.
+- Both of these can be switched off under **Show details → Options**.
+
+To compare two sessions fairly, play the same game for about the same length of time, with the laptop in
+the same place and the room at a similar temperature.
 
 ## Safety
 

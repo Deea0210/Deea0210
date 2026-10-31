@@ -27,6 +27,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private readonly Settings _settings = Settings.Load();
     private readonly GameModeService _gameMode = new();
+    private readonly PerformanceRecorder _recorder = new();
     private readonly Queue<double> _cpuHistory = new();
     private readonly Queue<double> _gpuHistory = new();
     private readonly CancellationTokenSource _stop = new();
@@ -34,6 +35,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private RazerLaptop? _laptop;
     private SensorService? _sensors;
+    private RazerState? _lastState;
     private volatile bool _manualFansActive;
     private volatile bool _safetyTriggered;
     private PerformanceMode _appliedMode = PerformanceMode.Balanced;
@@ -51,6 +53,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _gamingPerformanceMode = _settings.GamingPerformanceMode;
         _purgeStandby = _settings.PurgeStandbyMemory;
         _trimAppMemory = _settings.TrimAppMemory;
+        _recordPerformance = _settings.RecordPerformance;
+        _openReportWhenDone = _settings.OpenReportWhenDone;
         _isGameModeActive = GameModeService.IsActive;
 
         ApplyCommand = new RelayCommand(() => _ = ApplyPerformanceAsync(), () => IsLaptopConnected && !IsBusy);
@@ -63,6 +67,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         InstallPawnIoCommand = new RelayCommand(InstallPawnIo);
         ToggleDetailsCommand = new RelayCommand(() => ShowDetails = !ShowDetails);
         OpenLogCommand = new RelayCommand(() => OpenFile(AppPaths.LogFile));
+        OpenReportCommand = new RelayCommand(OpenLastReport, () => LastReportPath != null);
 
         LoadGameModeLists();
         if (IsGameModeActive)
@@ -177,6 +182,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 LogOnce("fan safety", ex);
             }
 
+            // The fan speed is only read every third tick, so the last one stands in.
+            if (state != null)
+            {
+                _lastState = state;
+            }
+
+            try
+            {
+                _recorder.Add(reading, _lastState);
+            }
+            catch (Exception ex)
+            {
+                LogOnce("recording performance", ex);
+            }
+
             Ui(() => ShowReading(reading, memory, state));
 
             try
@@ -205,6 +225,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public void Shutdown()
     {
         _stop.Cancel();
+        // Writes the report and, importantly, stops PresentMon.
+        _recorder.Stop();
         SaveSettings();
         lock (_laptopGate)
         {
@@ -226,6 +248,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _stop.Cancel();
+        _recorder.Stop();
         lock (_laptopGate)
         {
             _laptop?.Dispose();
@@ -393,6 +416,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Mode = PerformanceMode.Gaming;
         }
         IsGameModeActive = GameModeService.IsActive;
+        if (RecordPerformance)
+        {
+            _recorder.Start();
+        }
         StatusText = "Game Mode is on. Have fun!";
         IsBusy = false;
     }
@@ -424,6 +451,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             GameModeLog.Add(line);
         }
         IsGameModeActive = GameModeService.IsActive;
+        var report = await Task.Run(() => _recorder.Stop());
+        if (report != null)
+        {
+            GameModeLog.Add("Performance report saved: " + System.IO.Path.GetFileName(report));
+            OnPropertyChanged(nameof(LastReportPath));
+            CommandManager.InvalidateRequerySuggested();
+            if (OpenReportWhenDone)
+            {
+                OpenUrl(report);
+            }
+        }
         StatusText = "Restored. Everything is back to how it was.";
         IsBusy = false;
     }
@@ -455,6 +493,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.GamingPerformanceMode = GamingPerformanceMode;
         _settings.PurgeStandbyMemory = PurgeStandby;
         _settings.TrimAppMemory = TrimAppMemory;
+        _settings.RecordPerformance = RecordPerformance;
+        _settings.OpenReportWhenDone = OpenReportWhenDone;
         foreach (var s in Services)
         {
             _settings.Services[s.Key] = s.IsChecked;
@@ -491,6 +531,36 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             Log.Error("installing PawnIO", ex);
             OpenUrl("https://pawnio.eu/");
+        }
+    }
+
+    /// <summary>The newest report on disk, or null if there isn't one yet.</summary>
+    public string? LastReportPath => _recorder.LastReportPath ?? NewestReport();
+
+    private static string? NewestReport()
+    {
+        try
+        {
+            if (!System.IO.Directory.Exists(AppPaths.Reports))
+            {
+                return null;
+            }
+            return System.IO.Directory.GetFiles(AppPaths.Reports, "session-*.html")
+                .OrderByDescending(f => f).FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("looking for the last report", ex);
+            return null;
+        }
+    }
+
+    private void OpenLastReport()
+    {
+        var report = LastReportPath;
+        if (report != null)
+        {
+            OpenUrl(report);
         }
     }
 
@@ -589,6 +659,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand InstallPawnIoCommand { get; }
     public RelayCommand ToggleDetailsCommand { get; }
     public RelayCommand OpenLogCommand { get; }
+    public RelayCommand OpenReportCommand { get; }
 
     public ObservableCollection<OptionItem> Services { get; } = new();
     public ObservableCollection<OptionItem> Apps { get; } = new();
@@ -773,4 +844,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool _trimAppMemory;
     public bool TrimAppMemory { get => _trimAppMemory; set => Set(ref _trimAppMemory, value); }
+
+    private bool _recordPerformance;
+    public bool RecordPerformance { get => _recordPerformance; set => Set(ref _recordPerformance, value); }
+
+    private bool _openReportWhenDone;
+    public bool OpenReportWhenDone { get => _openReportWhenDone; set => Set(ref _openReportWhenDone, value); }
 }

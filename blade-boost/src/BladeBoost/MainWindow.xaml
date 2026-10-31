@@ -19,6 +19,7 @@
         <DockPanel Margin="0,0,0,16">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="{Binding LaptopModeText}" Style="{StaticResource MutedText}" Margin="0,0,18,0" VerticalAlignment="Center" />
+                <Button Content="Last report" Style="{StaticResource LinkButton}" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" Margin="0,0,16,0" ToolTip="Opens the graphs from your last Game Mode session" />
                 <Button Content="Open log" Style="{StaticResource LinkButton}" Command="{Binding OpenLogCommand}" VerticalAlignment="Center" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
@@ -243,6 +244,8 @@
                                 <CheckBox Content="Free cached (standby) memory" IsChecked="{Binding PurgeStandby}" />
                                 <CheckBox Content="Trim app memory (can cause a brief stutter while apps reload)" IsChecked="{Binding TrimAppMemory}" />
                                 <CheckBox Content="Reopen closed apps when I press Restore" IsChecked="{Binding ReopenApps}" />
+                                <CheckBox Content="Keep a performance log and show the graphs afterwards" IsChecked="{Binding RecordPerformance}" />
+                                <CheckBox Content="Open those graphs as soon as I press Restore" IsChecked="{Binding OpenReportWhenDone}" IsEnabled="{Binding RecordPerformance}" Margin="18,0,0,0" />
 
                                 <TextBlock Text="SERVICES TO PAUSE" Style="{StaticResource Label}" />
                                 <ItemsControl ItemsSource="{Binding Services}">

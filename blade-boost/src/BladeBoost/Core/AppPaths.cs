@@ -13,6 +13,7 @@ internal static class AppPaths
     public static string Settings => Path.Combine(Folder, "settings.json");
     public static string Snapshot => Path.Combine(Folder, "gamemode-snapshot.json");
     public static string LogFile => Path.Combine(Folder, "log.txt");
+    public static string Reports => Path.Combine(Folder, "reports");
 
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
