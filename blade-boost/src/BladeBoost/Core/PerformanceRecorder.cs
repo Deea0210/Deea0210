@@ -27,19 +27,12 @@ internal sealed record FpsSecond(double Seconds, double Fps);
 /// Records temperatures, load, clocks, power, fan speed and frame rate for as long as
 /// Game Mode is on, then writes a CSV and a self-contained HTML report with graphs.
 ///
-/// Frame rate comes from PresentMon, which arrives with NVIDIA's driver package. If it is
-/// not there the report simply leaves frame rate out and everything else still works.
+/// Frame rate comes from Intel's PresentMon, if it is installed. Without it the report
+/// simply leaves frame rate out and everything else still works.
 /// Call Add from one thread only, the same way SensorService is used.
 /// </summary>
 public sealed class PerformanceRecorder
 {
-    /// <summary>Where NVIDIA's installer leaves PresentMon, relative to Program Files.</summary>
-    private static readonly string[] PresentMonPaths =
-    {
-        @"NVIDIA Corporation\FrameViewSDK\bin\PresentMon_x64.exe",
-        @"NVIDIA Corporation\FrameView\PresentMon_x64.exe",
-    };
-
     private readonly List<PerfSample> _samples = new();
     private readonly Stopwatch _clock = new();
     private Process? _presentMon;
@@ -138,23 +131,57 @@ public sealed class PerformanceRecorder
 
     // ---------- Frame rate ----------
 
-    private static string? FindPresentMon()
+    /// <summary>
+    /// Folders PresentMon is looked for in, nearest first: beside BladeBoost itself, then the
+    /// tools folder next to the settings, then where Intel's own installer puts it.
+    /// </summary>
+    private static IEnumerable<string> PresentMonFolders()
     {
+        var beside = Path.GetDirectoryName(Environment.ProcessPath);
+        if (!string.IsNullOrEmpty(beside))
+        {
+            yield return beside;
+        }
+        yield return Path.Combine(AppPaths.Folder, "tools");
         var roots = new[] { Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86 };
         foreach (var root in roots)
         {
             var baseDir = Environment.GetFolderPath(root);
-            if (string.IsNullOrEmpty(baseDir))
+            if (!string.IsNullOrEmpty(baseDir))
             {
-                continue;
+                yield return Path.Combine(baseDir, @"Intel\PresentMon");
             }
-            foreach (var relative in PresentMonPaths)
+        }
+    }
+
+    /// <summary>
+    /// Finds Intel's PresentMon. A plain download keeps its version in the file name, so that
+    /// spelling is matched too. NVIDIA's FrameView copy is deliberately left out: it exits
+    /// immediately when run on its own, and finding it first would mean no frames at all.
+    /// </summary>
+    private static string? FindPresentMon()
+    {
+        var patterns = new[] { "PresentMon.exe", "PresentMon-x64.exe", "PresentMon-*-x64.exe" };
+        foreach (var folder in PresentMonFolders())
+        {
+            try
             {
-                var path = Path.Combine(baseDir, relative);
-                if (File.Exists(path))
+                if (!Directory.Exists(folder))
                 {
-                    return path;
+                    continue;
                 }
+                foreach (var pattern in patterns)
+                {
+                    var match = Directory.EnumerateFiles(folder, pattern).FirstOrDefault();
+                    if (match != null)
+                    {
+                        return match;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"looking for PresentMon in {folder}", ex);
             }
         }
         return null;
@@ -179,6 +206,10 @@ public sealed class PerformanceRecorder
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                // Redirected to a pipe PresentMon writes plain narrow text, even though it
+                // writes UTF-16 to a real console. Decoding it as UTF-16 turns it into mojibake.
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             // v1 metrics keep the long-standing, simple column names this parser reads.
             var args = new[]
@@ -192,10 +223,20 @@ public sealed class PerformanceRecorder
             }
             _presentMon = Process.Start(info);
             _fpsCsv = csv;
+            if (_presentMon != null)
+            {
+                // Both pipes have to be drained or a long session can fill one and wedge
+                // PresentMon. What it says is worth keeping too: without administrator rights
+                // it refuses to start a trace at all, and that is the failure worth explaining.
+                _presentMon.OutputDataReceived += (_, e) => LogPresentMon(e.Data);
+                _presentMon.ErrorDataReceived += (_, e) => LogPresentMon(e.Data);
+                _presentMon.BeginOutputReadLine();
+                _presentMon.BeginErrorReadLine();
+            }
             // Frame times are measured from PresentMon's own start, which is a moment after
             // ours. Remember the gap so frames land on the right second of this session.
             _fpsOffset = _clock.Elapsed.TotalSeconds;
-            Log.Write("Recording: frame rate capture started");
+            Log.Write($"Recording: frame rate capture started ({Path.GetFileName(exe)})");
         }
         catch (Exception ex)
         {
@@ -203,6 +244,16 @@ public sealed class PerformanceRecorder
             Log.Error("starting the frame rate capture", ex);
             _presentMon = null;
             _fpsCsv = null;
+        }
+    }
+
+    /// <summary>Logs a line PresentMon printed, so a refusal to start is on the record.</summary>
+    private static void LogPresentMon(string? line)
+    {
+        var text = line?.Replace("\0", "").Trim();
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            Log.Write($"PresentMon: {text}");
         }
     }
 
@@ -445,9 +496,11 @@ public sealed class PerformanceRecorder
         }
         if (frames.Count == 0)
         {
-            html.Append("<b>No frame rate was recorded.</b> That comes from PresentMon, which arrives ")
-                .Append("with NVIDIA's driver package, and it only counts frames while a game is ")
-                .Append("actually drawing. Nothing else in this report is affected.<br><br>");
+            html.Append("<b>No frame rate was recorded.</b> That is counted by PresentMon, and only ")
+                .Append("while a game is actually drawing. If it keeps coming up empty, check that ")
+                .Append("<b>PresentMon.exe</b> is beside BladeBoost or in its <b>tools</b> folder, and ")
+                .Append("that BladeBoost is running as administrator, which PresentMon needs. Nothing ")
+                .Append("else in this report is affected.<br><br>");
         }
         if (fanPeak == 0)
         {

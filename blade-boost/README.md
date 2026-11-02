@@ -31,8 +31,12 @@ session second by second. **Last report** in the top right reopens the most rece
 
 - Reports are saved in `%LOCALAPPDATA%\BladeBoost\reports`, one `.html` page and one `.csv` per session.
 - The page is self-contained, so you can email it or open it on any machine with nothing installed.
-- **Frame rate** comes from PresentMon, which arrives with NVIDIA's driver package
-  (`C:\Program Files\NVIDIA Corporation\FrameViewSDK`). Without it every other graph still works.
+- **Frame rate** comes from [Intel's PresentMon](https://github.com/GameTechDev/PresentMon/releases),
+  the small console build (`PresentMon-<version>-x64.exe`, about 1 MB, not the installer). Put it
+  beside `BladeBoost.exe` or in `%LOCALAPPDATA%\BladeBoost\tools`, named `PresentMon.exe` or left
+  with its version in the name. It needs BladeBoost to be running as administrator, which the logon
+  task already does. Without it every other graph still works.
+  NVIDIA's FrameView copy of PresentMon is **not** used: it exits immediately when run on its own.
 - **CPU temperature** needs PawnIO, same as the live readout.
 - Sessions shorter than 10 seconds are not worth a report, so none is written.
 - Both of these can be switched off under **Show details → Options**.
