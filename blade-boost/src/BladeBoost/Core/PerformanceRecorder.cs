@@ -200,6 +200,12 @@ public sealed class PerformanceRecorder
         {
             Directory.CreateDirectory(AppPaths.Reports);
             var csv = Path.Combine(AppPaths.Reports, "frames.csv");
+            // Clear any capture left by an earlier session first. The name is fixed, so if
+            // PresentMon fails to start, whatever is sitting there would be read as this
+            // session's frames and drawn as a frame rate graph that belongs to another game.
+            // Failing here is not silent: the catch below gives up on frame rate entirely,
+            // which is the right answer when the file cannot be trusted.
+            File.Delete(csv);
             var info = new ProcessStartInfo(exe)
             {
                 UseShellExecute = false,
@@ -285,7 +291,29 @@ public sealed class PerformanceRecorder
         }
         var csv = _fpsCsv;
         _fpsCsv = null;
-        return csv == null ? new List<FpsSecond>() : ReadFrames(csv, _fpsOffset);
+        if (csv == null)
+        {
+            return new List<FpsSecond>();
+        }
+        var frames = ReadFrames(csv, _fpsOffset);
+        // PresentMon writes one row per frame, which is around 60 MB an hour. The per-second
+        // figures are in the report's own CSV, so the raw capture has nothing left to give.
+        try
+        {
+            // It is already gone if PresentMon never got started, which is not an error.
+            var file = new FileInfo(csv);
+            if (file.Exists)
+            {
+                var size = file.Length;
+                File.Delete(csv);
+                Log.Write($"Recording: removed the raw frame capture ({size / 1024.0 / 1024.0:N1} MB)");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("removing the raw frame capture", ex);
+        }
+        return frames;
     }
 
     /// <summary>
