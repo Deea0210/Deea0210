@@ -53,6 +53,21 @@ public sealed class FanCurve
     private const int DropTicks = 30;
 
     /// <summary>
+    /// How many consecutive readings must call for more air before the fans move up.
+    ///
+    /// This is not caution for its own sake. On this laptop a single-core turbo boost
+    /// lasting a few milliseconds puts the package sensor into the 70s or 80s while
+    /// the machine is sitting idle, so one sample is not evidence of heat. Proven on
+    /// 4 Nov 2026: an idle spike to exactly 68C held the fans at 4,200 RPM for 44
+    /// seconds for nothing.
+    ///
+    /// Three seconds is still far quicker than the thermal mass of a laptop, and the
+    /// 92C/85C cutout is checked separately on every single reading, so nothing here
+    /// delays the response to a genuine emergency.
+    /// </summary>
+    private const int RiseTicks = 3;
+
+    /// <summary>
     /// Without a usable reading for this many ticks, fall back to auto. This is the
     /// watchdog: if the sensors die while the curve happens to be holding a speed,
     /// the fans must not stay pinned there indefinitely.
@@ -61,6 +76,7 @@ public sealed class FanCurve
 
     private int _target;
     private int _coolTicks;
+    private int _riseTicks;
     private int _blindTicks;
 
     /// <summary>The speed the curve currently wants. 0 means automatic.</summary>
@@ -71,6 +87,7 @@ public sealed class FanCurve
     {
         _target = 0;
         _coolTicks = 0;
+        _riseTicks = 0;
         _blindTicks = 0;
     }
 
@@ -95,13 +112,21 @@ public sealed class FanCurve
         }
         _blindTicks = 0;
 
-        // Up straight away. Heat does not wait for hysteresis.
+        // Up once a few readings agree. The count is of consecutive readings asking
+        // for *more* than we are giving, not of one particular speed, so a fast climb
+        // (69C, then 76C, then 83C) still reaches full speed on the third reading
+        // rather than restarting the count each time the number changes.
         if (demand > _target)
         {
             _coolTicks = 0;
-            _target = demand.Value;
+            if (++_riseTicks >= RiseTicks)
+            {
+                _riseTicks = 0;
+                _target = demand.Value;
+            }
             return _target;
         }
+        _riseTicks = 0;
 
         // Down only after it has genuinely settled below the band we are holding.
         if (demand < _target)
@@ -153,7 +178,8 @@ public sealed class FanCurve
     /// <summary>Plain-English description of the curve, for the window.</summary>
     public static string Describe() =>
         "Smart fans: automatic below 68°C, then 4,200 RPM from 68°C, 4,800 from 75°C "
-        + "and full speed from 82°C (GPU: 70, 76 and 81°C). It speeds up at once and "
-        + "eases off only after 30 seconds of cooler running. Any time a temperature "
-        + "cannot be read it returns the fans to automatic.";
+        + "and full speed from 82°C (GPU: 70, 76 and 81°C). It speeds up after 3 seconds "
+        + "of real heat, so a brief turbo spike at idle is ignored, and eases off only "
+        + "after 30 seconds of cooler running. Any time a temperature cannot be read it "
+        + "returns the fans to automatic.";
 }
