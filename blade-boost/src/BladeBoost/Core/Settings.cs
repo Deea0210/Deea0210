@@ -15,6 +15,12 @@ public sealed class Settings
     public bool ManualFans { get; set; }
     public int FanRpm { get; set; } = 4400;
 
+    /// <summary>
+    /// Let BladeBoost choose the fan speed from the temperature instead of holding
+    /// one speed. Its coolest band is automatic, so it never pins the fans low.
+    /// </summary>
+    public bool SmartFans { get; set; }
+
     // Safety: fans go to maximum above these temperatures (manual fan mode only).
     public int SafetyCpuTemp { get; set; } = 92;
     public int SafetyGpuTemp { get; set; } = 85;

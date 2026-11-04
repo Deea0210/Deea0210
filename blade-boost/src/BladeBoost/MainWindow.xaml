@@ -190,6 +190,12 @@
                                             SmallChange="100" LargeChange="200" TickFrequency="100" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="{Binding FanRpmText}" FontWeight="SemiBold" Margin="14,0,0,0" MinWidth="80" VerticalAlignment="Center" />
                                 </Grid>
+                                <CheckBox Content="Smart fans: pick the speed from the temperature"
+                                          IsChecked="{Binding SmartFans}" Margin="0,16,0,0"
+                                          Visibility="{Binding AutoFans, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="{Binding SmartFansText}" Style="{StaticResource MutedText}" FontSize="11.5"
+                                           TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Visibility="{Binding AutoFans, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
 
                             <WrapPanel Margin="0,18,0,0">

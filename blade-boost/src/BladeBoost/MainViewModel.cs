@@ -40,6 +40,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private volatile bool _safetyTriggered;
     private PerformanceMode _appliedMode = PerformanceMode.Balanced;
 
+    private readonly FanCurve _curve = new();
+
+    /// <summary>
+    /// The speed the curve has actually got the laptop to accept. It only moves on a
+    /// successful write, so a refused command is retried on the next tick instead of
+    /// the curve believing the fans are somewhere they are not.
+    /// </summary>
+    private volatile int _curveApplied;
+
     public MainViewModel()
     {
         _mode = Enum.TryParse<PerformanceMode>(_settings.PerformanceMode, out var mode) ? mode : PerformanceMode.Balanced;
@@ -47,6 +56,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _gpuBoost = GameModeService.ParseBoost(_settings.GpuBoost);
         _manualFans = _settings.ManualFans;
         _fanRpm = _settings.FanRpm;
+        _smartFans = _settings.SmartFans;
         _extraApps = _settings.ExtraApps;
         _reopenApps = _settings.ReopenApps;
         _bestPerformancePower = _settings.BestPerformancePower;
@@ -180,6 +190,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 LogOnce("fan safety", ex);
+            }
+
+            try
+            {
+                DriveCurve(reading);
+            }
+            catch (Exception ex)
+            {
+                LogOnce("fan curve", ex);
+                // A curve that is throwing must not be left holding the fans.
+                ReleaseCurve("the fan curve hit an error");
             }
 
             // The fan speed is only read every third tick, so the last one stands in.
@@ -325,6 +346,111 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves the fans to whatever the curve asks for. Runs once a second.
+    ///
+    /// It stands aside for anything with a better claim on the fans: an explicit
+    /// manual speed, Game Mode, and above all the safety cutout, which latches at
+    /// maximum and must never be wound back down by a curve.
+    /// </summary>
+    private void DriveCurve(SensorReading r)
+    {
+        // Custom mode is excluded because the laptop insists on managing the fans
+        // there: Apply() quietly discards the speed, which would leave the curve
+        // believing it had set one.
+        if (!SmartFans || _safetyTriggered || IsGameModeActive || ManualFans
+            || _appliedMode == PerformanceMode.Custom)
+        {
+            // Let go of the fans if we were holding them when this became true.
+            var why = !SmartFans ? "smart fans are off"
+                : _safetyTriggered ? null
+                : IsGameModeActive ? "Game Mode has the fans"
+                : ManualFans ? "a manual speed was chosen"
+                : "Custom mode manages its own fans";
+            ReleaseCurve(why);
+            return;
+        }
+        if (_laptop == null)
+        {
+            return;
+        }
+
+        var target = _curve.Next(r.CpuTemp, r.GpuTemp);
+        if (target == _curveApplied)
+        {
+            return;
+        }
+
+        lock (_laptopGate)
+        {
+            if (_laptop == null)
+            {
+                return;
+            }
+            // target of 0 means automatic, which is the curve's resting state.
+            if (!_laptop.Apply(_appliedMode, target, CpuBoost, GpuBoost))
+            {
+                // Leave _curveApplied alone so the next tick tries again.
+                LogOnce("applying the fan curve", new InvalidOperationException("the laptop refused the fan speed"));
+                return;
+            }
+            _curveApplied = target;
+            // Keeps the safety cutout armed whenever the curve is holding a speed.
+            _manualFansActive = target > 0;
+        }
+
+        Log.Write($"Fan curve: {(target == 0 ? "automatic" : target + " RPM")}"
+            + $" (CPU {(r.CpuTemp.HasValue ? r.CpuTemp.Value.ToString("0") + "°C" : "unknown")},"
+            + $" GPU {(r.GpuTemp.HasValue ? r.GpuTemp.Value.ToString("0") + "°C" : "unknown")})");
+        Ui(() => StatusText = target == 0
+            ? "Smart fans: automatic, nothing needs cooling."
+            : $"Smart fans: {target:N0} RPM.");
+    }
+
+    /// <summary>
+    /// Hands the fans back to the laptop if the curve was holding them. Used when
+    /// smart fans are switched off, when something else takes over, and when the
+    /// curve itself fails, so a fault can never leave the fans stuck on a speed.
+    /// </summary>
+    private void ReleaseCurve(string? reason)
+    {
+        if (_curveApplied == 0)
+        {
+            _curve.Reset();
+            return;
+        }
+        lock (_laptopGate)
+        {
+            // Not while the safety cutout is holding maximum: that outranks us.
+            if (_laptop == null || _safetyTriggered)
+            {
+                _curveApplied = 0;
+                _curve.Reset();
+                return;
+            }
+            try
+            {
+                if (!_laptop.Apply(_appliedMode, 0, CpuBoost, GpuBoost))
+                {
+                    // Keep _curveApplied so we know the fans are still ours and try
+                    // again next tick. Clearing it here would strand them on a speed
+                    // with nothing left to hand them back.
+                    LogOnce("releasing the fan curve", new InvalidOperationException("the laptop refused to return the fans to automatic"));
+                    return;
+                }
+                _manualFansActive = false;
+                Log.Write($"Fan curve: released, fans back to automatic{(reason == null ? "" : " (" + reason + ")")}");
+            }
+            catch (Exception ex)
+            {
+                LogOnce("releasing the fan curve", ex);
+                return;
+            }
+            _curveApplied = 0;
+            _curve.Reset();
+        }
+    }
+
     // ---------- Performance ----------
 
     private async Task ApplyPerformanceAsync()
@@ -355,6 +481,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _appliedMode = mode;
         _manualFansActive = rpm > 0;
         _safetyTriggered = false;
+        // The user's own Apply has just overwritten whatever the curve had set, so
+        // forget its state rather than release it, which would undo this speed.
+        _curveApplied = 0;
+        _curve.Reset();
         SaveSettings();
         StatusText = ok
             ? $"Applied: {mode} mode, " + (rpm > 0 ? $"fans at {rpm:N0} RPM. Keep BladeBoost open (minimized is fine) while you play." : "automatic fans.")
@@ -487,6 +617,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _settings.GpuBoost = GpuBoost.ToString();
         _settings.ManualFans = ManualFans;
         _settings.FanRpm = FanRpm;
+        _settings.SmartFans = SmartFans;
         _settings.ExtraApps = ExtraApps;
         _settings.ReopenApps = ReopenApps;
         _settings.BestPerformancePower = BestPerformancePower;
@@ -794,6 +925,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _manualFans;
     public bool ManualFans { get => _manualFans; set { if (Set(ref _manualFans, value)) OnPropertyChanged(nameof(AutoFans)); } }
     public bool AutoFans { get => !ManualFans; set => ManualFans = !value; }
+
+    private bool _smartFans;
+    public bool SmartFans
+    {
+        get => _smartFans;
+        set
+        {
+            if (!Set(ref _smartFans, value))
+            {
+                return;
+            }
+            SaveSettings();
+            if (!value)
+            {
+                // Switched off: give the fans straight back rather than wait a tick.
+                // Off the UI thread, because this writes to the laptop over HID.
+                _ = Task.Run(() => ReleaseCurve("smart fans switched off"));
+                StatusText = "Smart fans off, the laptop is managing the fans again.";
+            }
+        }
+    }
+
+    public string SmartFansText => FanCurve.Describe();
 
     public bool CanUseManualFans => Mode != PerformanceMode.Custom;
 
